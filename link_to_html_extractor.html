@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Page Source Extractor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: radial-gradient(circle at top left, #0f172a, #020617);
+            min-height: 100vh;
+            color: #f8fafc;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .glass {
+            background: rgba(30, 41, 59, 0.65);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
+</head>
+<body class="p-4 md:p-8 flex items-center justify-center">
+
+    <div class="glass w-full max-w-4xl rounded-2xl p-6 md:p-8 shadow-2xl">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-700/60">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
+                    <i class="fa-solid fa-code text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl md:text-2xl font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">
+                        Live Code Extractor
+                    </h1>
+                    <p class="text-xs text-slate-400">Recover lost HTML from your live Cloudflare / Web URL</p>
+                </div>
+            </div>
+            <span id="statusBadge" class="hidden px-3 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700">
+                Ready
+            </span>
+        </div>
+
+        <!-- Input Section -->
+        <div class="space-y-4 mb-6">
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                    Enter Your Live Page URL
+                </label>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <div class="relative flex-1">
+                        <i class="fa-solid fa-link absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"></i>
+                        <input 
+                            type="url" 
+                            id="targetUrl" 
+                            placeholder="https://your-site.pages.dev" 
+                            class="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-900/90 border border-slate-700 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition"
+                        >
+                    </div>
+                    <button 
+                        onclick="extractCode()" 
+                        id="fetchBtn"
+                        class="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-semibold text-sm flex items-center justify-center gap-2 transition shadow-lg shadow-indigo-600/20 cursor-pointer"
+                    >
+                        <i class="fa-solid fa-bolt"></i>
+                        <span>Extract HTML</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Proxy Method Selector -->
+            <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 bg-slate-900/50 p-3 rounded-xl border border-slate-800">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-shield-halved text-indigo-400"></i>
+                    <span>Fetch Mode:</span>
+                </div>
+                <div class="flex items-center gap-4">
+                    <label class="flex items-center gap-1.5 cursor-pointer">
+                        <input type="radio" name="proxyMode" value="auto" checked class="accent-indigo-500">
+                        <span>Auto Bypass CORS (Recommended)</span>
+                    </label>
+                    <label class="flex items-center gap-1.5 cursor-pointer">
+                        <input type="radio" name="proxyMode" value="direct" class="accent-indigo-500">
+                        <span>Direct Fetch</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Code Output Section -->
+        <div class="relative">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    Extracted Source Code
+                </span>
+                <span id="charCount" class="text-xs text-slate-500">0 characters</span>
+            </div>
+
+            <div class="relative group">
+                <textarea 
+                    id="codeOutput" 
+                    readonly 
+                    placeholder="Your recovered HTML code will appear here..."
+                    class="w-full h-80 p-4 rounded-xl bg-slate-950/90 border border-slate-800 text-emerald-400 font-mono text-xs leading-relaxed focus:outline-none focus:border-slate-700 resize-y"
+                ></textarea>
+
+                <!-- Loading Overlay -->
+                <div id="loader" class="hidden absolute inset-0 bg-slate-950/80 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center gap-3">
+                    <i class="fa-solid fa-circle-notch fa-spin text-3xl text-indigo-400"></i>
+                    <p id="loaderText" class="text-sm text-slate-300 font-medium">Fetching live source code...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex flex-wrap items-center justify-between gap-3 mt-6 pt-4 border-t border-slate-800">
+            <div class="flex items-center gap-2">
+                <input 
+                    type="text" 
+                    id="fileName" 
+                    value="index.html" 
+                    class="px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-slate-300 w-36 focus:outline-none focus:border-indigo-500"
+                    title="Custom file name"
+                >
+                <button 
+                    onclick="downloadFile()" 
+                    class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-2 transition shadow-lg shadow-emerald-600/20 cursor-pointer"
+                >
+                    <i class="fa-solid fa-download"></i>
+                    <span>Download File</span>
+                </button>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button 
+                    onclick="copyCode()" 
+                    class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-2 border border-slate-700 transition cursor-pointer"
+                >
+                    <i class="fa-regular fa-copy"></i>
+                    <span id="copyBtnText">Copy Code</span>
+                </button>
+                <button 
+                    onclick="clearAll()" 
+                    class="px-3 py-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-semibold border border-rose-500/20 transition cursor-pointer"
+                    title="Clear Output"
+                >
+                    <i class="fa-solid fa-trash-can"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const statusBadge = document.getElementById('statusBadge');
+        const loader = document.getElementById('loader');
+        const loaderText = document.getElementById('loaderText');
+        const codeOutput = document.getElementById('codeOutput');
+        const charCount = document.getElementById('charCount');
+
+        function setStatus(text, type = 'info') {
+            statusBadge.classList.remove('hidden', 'bg-slate-800', 'text-slate-300', 'bg-emerald-500/20', 'text-emerald-300', 'bg-rose-500/20', 'text-rose-300', 'bg-amber-500/20', 'text-amber-300');
+            statusBadge.innerText = text;
+            
+            if (type === 'success') {
+                statusBadge.classList.add('bg-emerald-500/20', 'text-emerald-300');
+            } else if (type === 'error') {
+                statusBadge.classList.add('bg-rose-500/20', 'text-rose-300');
+            } else if (type === 'warn') {
+                statusBadge.classList.add('bg-amber-500/20', 'text-amber-300');
+            } else {
+                statusBadge.classList.add('bg-slate-800', 'text-slate-300');
+            }
+        }
+
+        async function extractCode() {
+            let url = document.getElementById('targetUrl').value.trim();
+            if (!url) {
+                setStatus('Please enter a valid URL!', 'error');
+                return;
+            }
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                url = 'https://' + url;
+                document.getElementById('targetUrl').value = url;
+            }
+
+            const mode = document.querySelector('input[name="proxyMode"]:checked').value;
+            loader.classList.remove('hidden');
+            setStatus('Fetching...', 'warn');
+
+            // List of endpoints to try (Direct + Reliable CORS Proxies)
+            const endpoints = mode === 'direct' 
+                ? [url] 
+                : [
+                    `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+                    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+                    `https://corsproxy.io/?${encodeURIComponent(url)}`,
+                    url
+                ];
+
+            let success = false;
+
+            for (let i = 0; i < endpoints.length; i++) {
+                try {
+                    loaderText.innerText = `Trying route ${i + 1} of ${endpoints.length}...`;
+                    const response = await fetch(endpoints[i], { cache: 'no-store' });
+                    
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    
+                    const htmlText = await response.text();
+                    if (htmlText && htmlText.trim().length > 0) {
+                        codeOutput.value = htmlText;
+                        charCount.innerText = `${htmlText.length.toLocaleString()} characters`;
+                        setStatus('Extracted Successfully!', 'success');
+                        success = true;
+                        break;
+                    }
+                } catch (err) {
+                    console.warn(`Route ${i + 1} failed:`, err.message);
+                }
+            }
+
+            loader.classList.add('hidden');
+
+            if (!success) {
+                setStatus('Extraction Failed', 'error');
+                codeOutput.value = `/* Error: Could not fetch source via browser due to strict firewall/CORS.\n\nQuick Alternative in Termux:\nRun this command to download directly:\ncurl -L "${url}" -o index.html\n*/`;
+            }
+        }
+
+        function copyCode() {
+            const code = codeOutput.value;
+            if (!code) return setStatus('Nothing to copy!', 'error');
+
+            navigator.clipboard.writeText(code).then(() => {
+                const copyBtnText = document.getElementById('copyBtnText');
+                copyBtnText.innerText = 'Copied!';
+                setStatus('Copied to Clipboard', 'success');
+                setTimeout(() => { copyBtnText.innerText = 'Copy Code'; }, 2000);
+            });
+        }
+
+        function downloadFile() {
+            const code = codeOutput.value;
+            if (!code) return setStatus('Extract code first!', 'error');
+
+            let filename = document.getElementById('fileName').value.trim() || 'index.html';
+            if (!filename.includes('.')) filename += '.html';
+
+            const blob = new Blob([code], { type: 'text/html;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+            setStatus(`Downloaded ${filename}`, 'success');
+        }
+
+        function clearAll() {
+            codeOutput.value = '';
+            charCount.innerText = '0 characters';
+            setStatus('Cleared', 'info');
+        }
+    </script>
+</body>
+</html>
