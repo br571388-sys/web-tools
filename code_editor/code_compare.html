@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Code Compare</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Layout: one column tool. Two code panels side by side (stacked on phone), toolbar, summary strip, then a side-by-side diff table with line numbers. */
+  :root {
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --fg: #16191f;
+    --muted: #5d6572;
+    --line: #dde0e6;
+    --accent: #2f4be0;
+    --accent-fg: #ffffff;
+    --add: #17803d;
+    --add-bg: #e0f5e7;
+    --add-mark: #a9e5bc;
+    --del: #b42323;
+    --del-bg: #fde6e6;
+    --del-mark: #f6b5b5;
+    --mod: #94610a;
+    --mod-bg: #fdf1d8;
+    --warn-bg: #fff1d6;
+    --warn-line: #e3b04b;
+    --warn-fg: #5e3d00;
+    --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1218;
+      --surface: #171b23;
+      --fg: #e8ebf0;
+      --muted: #98a1b0;
+      --line: #2a303b;
+      --accent: #7f93ff;
+      --accent-fg: #0f1218;
+      --add: #5fd68a;
+      --add-bg: #12301e;
+      --add-mark: #1f5c36;
+      --del: #ff8a8a;
+      --del-bg: #3a1a1c;
+      --del-mark: #6e2a2d;
+      --mod: #f0be5c;
+      --mod-bg: #34290f;
+      --warn-bg: #33270c;
+      --warn-line: #8a6a1d;
+      --warn-fg: #f5d58f;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1218;
+    --surface: #171b23;
+    --fg: #e8ebf0;
+    --muted: #98a1b0;
+    --line: #2a303b;
+    --accent: #7f93ff;
+    --accent-fg: #0f1218;
+    --add: #5fd68a;
+    --add-bg: #12301e;
+    --add-mark: #1f5c36;
+    --del: #ff8a8a;
+    --del-bg: #3a1a1c;
+    --del-mark: #6e2a2d;
+    --mod: #f0be5c;
+    --mod-bg: #34290f;
+    --warn-bg: #33270c;
+    --warn-line: #8a6a1d;
+    --warn-fg: #f5d58f;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.5;
+    padding-block: 28px 48px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+  header h1 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(26px, 5vw, 36px);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    margin: 0 0 6px;
+    text-wrap: balance;
+  }
+  header p { margin: 0; color: var(--muted); max-width: 62ch; }
+
+  .notice {
+    display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+    background: var(--warn-bg); color: var(--warn-fg);
+    border: 1px solid var(--warn-line); border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .notice strong { font-weight: 600; }
+  .notice p { margin: 0; min-width: 0; flex: 1 1 260px; }
+
+  .editors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .panel {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    display: flex; flex-direction: column; min-width: 0; overflow: hidden;
+  }
+  .panel-head {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+    padding: 10px 14px; border-bottom: 1px solid var(--line);
+  }
+  .panel-head h2 { font-family: var(--font-display); font-size: 16px; margin: 0; font-weight: 600; }
+  .panel-head span { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  textarea {
+    width: 100%; min-height: 280px; resize: vertical; border: 0; outline: 0;
+    background: transparent; color: var(--fg);
+    font-family: var(--font-mono); font-size: 13px; line-height: 1.55;
+    padding: 12px 14px; tab-size: 2; white-space: pre; overflow: auto;
+  }
+  .panel:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; }
+  button {
+    font: inherit; font-weight: 500; cursor: pointer;
+    border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+    padding: 8px 14px; border-radius: 8px; min-height: 38px;
+  }
+  button:hover { border-color: var(--accent); }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 600; }
+  button.dashed { border-style: dashed; color: var(--muted); }
+  .opts { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); font-size: 14px; }
+  .opts label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  .opts input { accent-color: var(--accent); width: 16px; height: 16px; }
+
+  .summary { display: flex; flex-direction: column; gap: 12px; }
+  .verdict {
+    font-family: var(--font-display); font-size: 20px; font-weight: 600; letter-spacing: -0.01em; text-wrap: balance;
+  }
+  .verdict.same { color: var(--add); }
+  .verdict.diff { color: var(--mod); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums;
+    padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface);
+    display: inline-flex; gap: 6px; align-items: center;
+  }
+  .chip i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .chip.c-same i { background: var(--muted); }
+  .chip.c-mod i { background: var(--mod); }
+  .chip.c-add i { background: var(--add); }
+  .chip.c-del i { background: var(--del); }
+
+  .result { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .result-head {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-bottom: 1px solid var(--line);
+    font-family: var(--font-display); font-weight: 600; font-size: 14px;
+  }
+  .result-head div { padding: 9px 14px; }
+  .result-head div + div { border-left: 1px solid var(--line); }
+  .scroll { overflow-x: auto; }
+  table.diff { border-collapse: collapse; width: 100%; min-width: 760px; table-layout: fixed; font-family: var(--font-mono); font-size: 13px; line-height: 1.55; }
+  table.diff td { padding: 0 10px; vertical-align: top; white-space: pre-wrap; word-break: break-all; }
+  table.diff td.ln {
+    width: 48px; text-align: right; color: var(--muted); user-select: none; font-variant-numeric: tabular-nums;
+    border-right: 1px solid var(--line); padding-right: 8px; font-size: 12px;
+  }
+  table.diff td.code + td.ln { border-left: 1px solid var(--line); }
+  tr.mod td.code { background: var(--mod-bg); }
+  tr.add td.code.r { background: var(--add-bg); }
+  tr.del td.code.l { background: var(--del-bg); }
+  tr.empty-side td.code.blank { background: repeating-linear-gradient(135deg, transparent 0 6px, var(--line) 6px 7px); opacity: 0.6; }
+  tr.mod td.ln, tr.add td.ln.r, tr.del td.ln.l { color: var(--fg); }
+  mark.m-del { background: var(--del-mark); color: inherit; border-radius: 2px; }
+  mark.m-add { background: var(--add-mark); color: inherit; border-radius: 2px; }
+  tr.gap td { text-align: center; color: var(--muted); font-size: 12px; padding: 6px; background: var(--bg); border-block: 1px solid var(--line); white-space: normal; }
+  .empty-note { padding: 28px 16px; color: var(--muted); text-align: center; }
+
+  @media (max-width: 720px) {
+    .editors { grid-template-columns: 1fr; }
+    textarea { min-height: 220px; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    button { transition: border-color .15s, background-color .15s; }
+  }
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header>
+    <h1>Code Compare</h1>
+    <p>Paste two codes, change anything, and see exactly what changed, line by line. The limit is 2 codes.</p>
+  </header>
+
+  <div class="notice" id="limitNotice" role="status" hidden>
+    <p><strong>The limit is 2 codes.</strong> A third code can't be added. To compare something new, replace the text in Code 1 or Code 2.</p>
+    <button type="button" id="dismissNotice">Got it</button>
+  </div>
+
+  <section class="editors" aria-label="Code inputs">
+    <div class="panel">
+      <div class="panel-head"><h2>Code 1 (Original)</h2><span id="count1">0 lines</span></div>
+      <textarea id="code1" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Code 1" placeholder="Paste the first code here"></textarea>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Code 2 (Changed)</h2><span id="count2">0 lines</span></div>
+      <textarea id="code2" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Code 2" placeholder="Paste the second code here"></textarea>
+    </div>
+  </section>
+
+  <section class="toolbar" aria-label="Controls">
+    <div class="btns">
+      <button type="button" class="primary" id="compareBtn">Compare</button>
+      <button type="button" id="swapBtn">Swap Code 1 / 2</button>
+      <button type="button" id="clearBtn">Clear</button>
+      <button type="button" class="dashed" id="addBtn">+ Add code</button>
+    </div>
+    <div class="opts">
+      <label for="optWs"><input type="checkbox" id="optWs"> Ignore whitespace</label>
+      <label for="optCase"><input type="checkbox" id="optCase"> Ignore upper/lower case</label>
+      <label for="optOnly"><input type="checkbox" id="optOnly"> Show differences only</label>
+    </div>
+  </section>
+
+  <section class="summary" id="summary" aria-live="polite"></section>
+
+  <section class="result" id="result" hidden>
+    <div class="result-head"><div>Code 1</div><div>Code 2</div></div>
+    <div class="scroll"><table class="diff" id="diffTable"><colgroup><col style="width:48px"><col><col style="width:48px"><col></colgroup><tbody id="diffBody"></tbody></table></div>
+  </section>
+</div>
+
+<script>
+(function () {
+  var MAX_CODES = 2;
+  var $ = function (id) { return document.getElementById(id); };
+  var c1 = $('code1'), c2 = $('code2');
+
+  // Sample code, shown so the tool opens in a working state. Replace with your own.
+  c1.value = [
+    'function total(items) {',
+    '  let sum = 0;',
+    '  for (const item of items) {',
+    '    sum += item.price;',
+    '  }',
+    '  return sum;',
+    '}',
+    '',
+    'console.log(total(cart));'
+  ].join('\n');
+  c2.value = [
+    'function total(items, tax = 0) {',
+    '  let sum = 0;',
+    '  for (const item of items) {',
+    '    sum += item.price * item.qty;',
+    '  }',
+    '  sum = sum + sum * tax;',
+    '  return sum;',
+    '}',
+    '',
+    'console.log(total(cart, 0.18));'
+  ].join('\n');
+
+  function lines(text) {
+    if (text === '') return [];
+    return text.replace(/\r\n?/g, '\n').split('\n');
+  }
+  function norm(s) {
+    if ($('optWs').checked) s = s.replace(/\s+/g, ' ').trim();
+    if ($('optCase').checked) s = s.toLowerCase();
+    return s;
+  }
+  function updateCounts() {
+    $('count1').textContent = lines(c1.value).length + ' lines';
+    $('count2').textContent = lines(c2.value).length + ' lines';
+  }
+
+  // Line-level diff using longest common subsequence.
+  function diffLines(a, b) {
+    var na = a.map(norm), nb = b.map(norm);
+    var n = na.length, m = nb.length, w = m + 1;
+    var dp = new Uint32Array((n + 1) * w);
+    for (var i = n - 1; i >= 0; i--) {
+      for (var j = m - 1; j >= 0; j--) {
+        dp[i * w + j] = na[i] === nb[j]
+          ? dp[(i + 1) * w + j + 1] + 1
+          : Math.max(dp[(i + 1) * w + j], dp[i * w + j + 1]);
+      }
+    }
+    var ops = [], x = 0, y = 0;
+    while (x < n && y < m) {
+      if (na[x] === nb[y]) { ops.push({ t: 'eq', a: x, b: y }); x++; y++; }
+      else if (dp[(x + 1) * w + y] >= dp[x * w + y + 1]) { ops.push({ t: 'del', a: x }); x++; }
+      else { ops.push({ t: 'add', b: y }); y++; }
+    }
+    while (x < n) { ops.push({ t: 'del', a: x++ }); }
+    while (y < m) { ops.push({ t: 'add', b: y++ }); }
+
+    // Pair up deleted and added runs between equal lines as modified rows.
+    var rows = [], k = 0;
+    while (k < ops.length) {
+      if (ops[k].t === 'eq') {
+        rows.push({ type: 'eq', l: a[ops[k].a], ln: ops[k].a + 1, r: b[ops[k].b], rn: ops[k].b + 1 });
+        k++;
+      } else {
+        var dels = [], adds = [];
+        while (k < ops.length && ops[k].t !== 'eq') {
+          if (ops[k].t === 'del') dels.push(ops[k].a); else adds.push(ops[k].b);
+          k++;
+        }
+        var p = Math.max(dels.length, adds.length);
+        for (var q = 0; q < p; q++) {
+          var hasL = q < dels.length, hasR = q < adds.length;
+          rows.push({
+            type: hasL && hasR ? 'mod' : (hasL ? 'del' : 'add'),
+            l: hasL ? a[dels[q]] : null, ln: hasL ? dels[q] + 1 : null,
+            r: hasR ? b[adds[q]] : null, rn: hasR ? adds[q] + 1 : null
+          });
+        }
+      }
+    }
+    return rows;
+  }
+
+  // Highlight the changed middle part of a modified line.
+  function inlineParts(s, t) {
+    var pre = 0, max = Math.min(s.length, t.length);
+    while (pre < max && s[pre] === t[pre]) pre++;
+    var suf = 0;
+    while (suf < max - pre && s[s.length - 1 - suf] === t[t.length - 1 - suf]) suf++;
+    return {
+      s: [s.slice(0, pre), s.slice(pre, s.length - suf), s.slice(s.length - suf)],
+      t: [t.slice(0, pre), t.slice(pre, t.length - suf), t.slice(t.length - suf)]
+    };
+  }
+  function fillCode(td, parts, cls) {
+    td.appendChild(document.createTextNode(parts[0]));
+    if (parts[1] !== '') {
+      var mk = document.createElement('mark');
+      mk.className = cls;
+      mk.textContent = parts[1];
+      td.appendChild(mk);
+    }
+    td.appendChild(document.createTextNode(parts[2]));
+  }
+
+  function cell(cls, text) {
+    var td = document.createElement('td');
+    td.className = cls;
+    if (text != null) td.textContent = text;
+    return td;
+  }
+
+  function render(rows) {
+    var body = $('diffBody');
+    body.textContent = '';
+    var showOnly = $('optOnly').checked;
+    var keep = rows.map(function (r) { return r.type !== 'eq'; });
+    if (showOnly) {
+      var ctx = 2;
+      rows.forEach(function (r, i) {
+        if (r.type === 'eq') return;
+        for (var d = -ctx; d <= ctx; d++) if (rows[i + d]) keep[i + d] = true;
+      });
+    }
+    var hidden = 0;
+    function flushGap() {
+      if (!hidden) return;
+      var tr = document.createElement('tr');
+      tr.className = 'gap';
+      var td = document.createElement('td');
+      td.colSpan = 4;
+      td.textContent = hidden + ' unchanged lines hidden';
+      tr.appendChild(td);
+      body.appendChild(tr);
+      hidden = 0;
+    }
+    rows.forEach(function (r, i) {
+      if (showOnly && !keep[i]) { hidden++; return; }
+      flushGap();
+      var tr = document.createElement('tr');
+      tr.className = r.type + (r.type === 'add' || r.type === 'del' ? ' empty-side' : '');
+      var lnL = cell('ln l', r.ln != null ? r.ln : '');
+      var cdL = cell('code l' + (r.l == null ? ' blank' : ''));
+      var lnR = cell('ln r', r.rn != null ? r.rn : '');
+      var cdR = cell('code r' + (r.r == null ? ' blank' : ''));
+      if (r.type === 'mod') {
+        var parts = inlineParts(r.l, r.r);
+        fillCode(cdL, parts.s, 'm-del');
+        fillCode(cdR, parts.t, 'm-add');
+      } else {
+        if (r.l != null) cdL.textContent = r.l;
+        if (r.r != null) cdR.textContent = r.r;
+      }
+      [lnL, cdL, lnR, cdR].forEach(function (td) { tr.appendChild(td); });
+      body.appendChild(tr);
+    });
+    flushGap();
+  }
+
+  function chip(cls, n, label) {
+    return '<span class="chip ' + cls + '"><i></i>' + n + ' ' + label + '</span>';
+  }
+
+  function compare() {
+    var a = lines(c1.value), b = lines(c2.value);
+    var summary = $('summary'), result = $('result');
+    updateCounts();
+    if (a.length === 0 && b.length === 0) {
+      summary.innerHTML = '<div class="verdict diff">Paste both codes first.</div>';
+      result.hidden = true;
+      return;
+    }
+    if (a.length > 3000 || b.length > 3000) {
+      summary.innerHTML = '<div class="verdict diff">The code is too large. Up to 3000 lines per code can be compared.</div>';
+      result.hidden = true;
+      return;
+    }
+    var rows = diffLines(a, b);
+    var cnt = { eq: 0, mod: 0, add: 0, del: 0 };
+    rows.forEach(function (r) { cnt[r.type]++; });
+    var changed = cnt.mod + cnt.add + cnt.del;
+    var html;
+    if (changed === 0) {
+      html = '<div class="verdict same">Both codes are identical. No lines differ.</div>';
+    } else {
+      html = '<div class="verdict diff">' + changed + ' line' + (changed > 1 ? 's' : '') + ' differ.</div>';
+    }
+    html += '<div class="chips">' +
+      chip('c-same', cnt.eq, 'unchanged') +
+      chip('c-mod', cnt.mod, 'modified') +
+      chip('c-add', cnt.add, 'added (in Code 2)') +
+      chip('c-del', cnt.del, 'removed (only in Code 1)') +
+      '</div>';
+    summary.innerHTML = html;
+    result.hidden = false;
+    render(rows);
+  }
+
+  $('compareBtn').addEventListener('click', compare);
+  $('optWs').addEventListener('change', compare);
+  $('optCase').addEventListener('change', compare);
+  $('optOnly').addEventListener('change', compare);
+  $('swapBtn').addEventListener('click', function () {
+    var t = c1.value; c1.value = c2.value; c2.value = t; compare();
+  });
+  $('clearBtn').addEventListener('click', function () {
+    c1.value = ''; c2.value = ''; $('limitNotice').hidden = true; compare(); c1.focus();
+  });
+  // Both slots are always filled, so adding a third code always hits the limit.
+  $('addBtn').addEventListener('click', function () {
+    $('limitNotice').hidden = false;
+  });
+  $('dismissNotice').addEventListener('click', function () { $('limitNotice').hidden = true; });
+
+  var timer;
+  [c1, c2].forEach(function (el) {
+    el.addEventListener('input', function () {
+      updateCounts();
+      clearTimeout(timer);
+      timer = setTimeout(compare, 350);
+    });
+  });
+
+  compare();
+})();
+</script>
+
+</body>
+</html>
