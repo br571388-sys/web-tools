@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>HTML Live Preview - Pro DB Edition</title>
+<!-- Modern Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@600;800&display=swap" rel="stylesheet">
+<!-- FontAwesome for Icons -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+<style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+        --bg: #09090b;
+        --surface: #18181b;
+        --border: #3f3f46;
+        --accent: #10b981;
+        --text: #f4f4f5;
+        --muted: #a1a1aa;
+        --muted2: #71717a;
+
+        /* Editor palette (VS Code Dark+ on a navy base) */
+        --ed-bg: #151923;
+        --ed-panel: #1a1f2c;
+        --ed-line: #2a3144;
+        --ed-text: #d4d4d4;
+        --ed-dim: #5b6379;
+        --ed-blue: #007acc;
+
+        --font-ui: 'Inter', sans-serif;
+        --font-heading: 'Outfit', sans-serif;
+        --font-code: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+    }
+
+    body {
+        background: var(--bg); color: var(--text); font-family: var(--font-ui);
+        min-height: 100vh; display: flex; align-items: center; justify-content: center;
+        padding: 24px; position: relative;
+    }
+
+    body::before {
+        content: ''; position: fixed; inset: 0;
+        background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+                          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+        background-size: 30px 30px; pointer-events: none; z-index: 0;
+    }
+
+    .shell {
+        position: relative; z-index: 1; width: 100%; max-width: 1000px;
+        animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Header Styles */
+    .header-container { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .hicon {
+        width: 48px; height: 48px; background: linear-gradient(135deg, var(--accent), #34d399);
+        border-radius: 12px; display: flex; align-items: center; justify-content: center;
+        font-size: 24px; color: #000; box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3); flex-shrink: 0;
+    }
+    .htitle { font-family: var(--font-heading); font-size: 26px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.2; }
+    .hsub { font-size: 13px; color: var(--muted); margin-top: 2px; font-weight: 500; }
+
+    .header-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .btn-top {
+        background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid var(--border);
+        padding: 10px 18px; border-radius: 10px; font-family: var(--font-ui); font-size: 13px;
+        font-weight: 600; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; gap: 8px;
+        backdrop-filter: blur(8px); text-decoration: none;
+    }
+    .btn-top:hover { background: rgba(255,255,255,0.1); border-color: var(--muted); transform: translateY(-1px); }
+
+    /* Main Editor Card */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: 0 24px 64px rgba(0,0,0,0.6); }
+
+    /* Tab strip (VS Code style) */
+    .tabbar { display: flex; align-items: stretch; justify-content: space-between; background: #11151e; border-bottom: 1px solid var(--ed-line); height: 40px; }
+    .tab { display: flex; align-items: center; gap: 9px; padding: 0 16px; background: var(--ed-bg); color: #e6e6e6; font-family: var(--font-ui); font-size: 13px; border-top: 2px solid var(--ed-blue); min-width: 0; }
+    .tab i.fa-html5 { color: #e8754a; font-size: 14px; }
+    .tab #displayFileName { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46vw; }
+    .dirty { width: 9px; height: 9px; border-radius: 50%; background: #d4d4d4; opacity: 0; transition: opacity .15s; flex: none; }
+    .dirty.on { opacity: .9; }
+    .tab-tools { display: flex; align-items: center; gap: 4px; padding-right: 8px; }
+    .tab-btn { background: transparent; border: none; color: #9aa3bd; width: 32px; height: 28px; border-radius: 6px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; cursor: pointer; }
+    .tab-btn:hover { background: rgba(255,255,255,0.08); color: #fff; transform: none; }
+
+    /* Toolbar */
+    .toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--ed-panel); border-bottom: 1px solid var(--ed-line); overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+    .toolbar::-webkit-scrollbar { display: none; }
+    .tb-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid #2f374d; background: #1f2535; color: #cfd6ea; font-family: var(--font-ui); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: background .15s, border-color .15s; }
+    .tb-btn:hover { background: #283049; border-color: #3b4666; transform: none; }
+    .tb-btn:active { background: #313b58; }
+    .tb-btn.active { border-color: var(--ed-blue); color: #fff; background: #1b3550; }
+    .tb-btn.save { background: #14532d; border-color: #166534; color: #86efac; font-weight: 600; }
+    .tb-btn.save:hover { background: #166534; }
+    .tb-sep { flex: none; width: 1px; height: 22px; background: var(--ed-line); margin: 0 2px; }
+
+    /* Editor */
+    .editor-wrap { position: relative; height: clamp(340px, 62vh, 640px); background: var(--ed-bg); }
+    #editor { position: absolute; inset: 0; font-family: var(--font-code); }
+    .fallback-ta { position: absolute; inset: 0; width: 100%; height: 100%; background: var(--ed-bg); color: var(--ed-text); border: 0; outline: 0; resize: none; padding: 12px 14px; font: 400 14px/1.65 var(--font-code); tab-size: 2; white-space: pre; overflow: auto; }
+
+    /* Status bar */
+    .statusbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--ed-blue); color: #fff; font-family: var(--font-ui); font-size: 12px; padding: 0 10px; height: 26px; overflow: hidden; white-space: nowrap; }
+    .sb-left, .sb-right { display: flex; align-items: center; gap: 4px; min-width: 0; }
+    .sb-item { padding: 0 8px; height: 26px; display: inline-flex; align-items: center; gap: 6px; }
+    .sb-item i { font-size: 12px; }
+
+    .bottombar { padding: 14px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; background: var(--surface); }
+
+    .btn-group { display: flex; gap: 12px; }
+    button { font-family: var(--font-ui); font-size: 13px; font-weight: 600; border: none; cursor: pointer; border-radius: 8px; padding: 10px 20px; transition: all 0.2s ease; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+    .btn-clear { background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); }
+    .btn-clear:hover { background: rgba(239, 68, 68, 0.2); border-color: #ef4444; }
+    .btn-save { background: rgba(16, 185, 129, 0.1); color: var(--accent); border: 1px solid rgba(16, 185, 129, 0.3); }
+    .btn-save:hover { background: rgba(16, 185, 129, 0.2); border-color: var(--accent); }
+    .btn-run { background: var(--accent); color: #000; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3); }
+    .btn-run:hover { background: #34d399; transform: translateY(-1px); }
+
+    /* Ace: theme-independent polish */
+    .ace_editor { line-height: 1.65; }
+    .ace_scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
+    .ace_scrollbar::-webkit-scrollbar-thumb { background: #2f374d; border-radius: 6px; border: 2px solid var(--ed-bg); }
+    .ace_scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .ace_search { background: #1c2130 !important; border: 1px solid #2b3245 !important; color: #d4d4d4 !important; border-radius: 0 0 10px 10px; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+    .ace_search_field { background: #0f131c !important; color: #d4d4d4 !important; border: 1px solid #2b3245 !important; border-radius: 6px; }
+    .ace_searchbtn, .ace_button { background: #262d40 !important; color: #d4d4d4 !important; border-color: #2b3245 !important; }
+    .ace_searchbtn:hover, .ace_button:hover { background: #323b55 !important; }
+    .ace_search_options .ace_button.checked { background: #1b3550 !important; border-color: var(--ed-blue) !important; }
+    .ace_tooltip { background: #1c2130 !important; color: #d4d4d4 !important; border: 1px solid #2b3245 !important; }
+
+    /* Base Modal Styles */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; pointer-events: none; transition: all 0.3s ease; padding: 16px; }
+    .modal-overlay.active { opacity: 1; pointer-events: auto; }
+    .modal-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 550px; box-shadow: 0 24px 64px rgba(0,0,0,0.8); display: flex; flex-direction: column; max-height: 80vh; transform: scale(0.95) translateY(10px); transition: all 0.3s ease; }
+    .modal-overlay.active .modal-card { transform: scale(1) translateY(0); }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid var(--border); }
+    .modal-title { font-family: var(--font-heading); font-size: 20px; color: var(--text); display: flex; align-items: center; gap: 10px; }
+    .btn-close-modal { background: rgba(255,255,255,0.05); color: var(--muted); border: none; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; padding: 0; transition: 0.2s; }
+    .btn-close-modal:hover { background: rgba(239,68,68,0.2); color: #ef4444; }
+
+    .history-list { padding: 20px 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+    .history-item { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; padding: 16px; display: flex; justify-content: space-between; align-items: center; transition: 0.2s; }
+    .history-item:hover { border-color: var(--muted); background: rgba(255,255,255,0.05); }
+    .history-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .history-name { font-weight: 600; color: var(--text); font-size: 15px; overflow-wrap: anywhere; }
+    .history-date { font-size: 12px; color: var(--muted); }
+    .preview-link { font-size: 12px; color: #38bdf8; text-decoration: none; margin-top: 4px; display: inline-flex; align-items: center; gap: 4px; font-weight: 500; }
+
+    .history-actions { display: flex; gap: 8px; }
+    .btn-load { background: rgba(16, 185, 129, 0.15); color: var(--accent); padding: 8px 14px; border-radius: 8px; font-size: 12px; }
+    .btn-del { background: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 8px 14px; border-radius: 8px; font-size: 12px; }
+    .empty-history { text-align: center; color: var(--muted); font-size: 14px; padding: 30px 0; }
+
+    /* Custom Confirm & Prompt Input Styling */
+    .mini-modal-card { max-width: 400px; padding: 24px; text-align: center; }
+    .mini-modal-icon { font-size: 48px; color: #ef4444; margin-bottom: 16px; }
+    .mini-modal-title { font-size: 16px; font-weight: 500; color: var(--text); margin-bottom: 24px; line-height: 1.5; }
+    .modal-input { width: 100%; padding: 12px 16px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--font-ui); font-size: 14px; outline: none; margin-bottom: 24px; transition: 0.2s; }
+    .modal-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(16,185,129,0.2); }
+    .modal-actions { display: flex; gap: 12px; justify-content: center; }
+
+    /* Toasts */
+    #toast-container { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 10px; z-index: 9999; }
+    .toast { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--accent); color: var(--text); padding: 14px 20px; border-radius: 8px; font-family: var(--font-ui); font-size: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 12px; animation: toastEnter 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+    .toast.error { border-left-color: #ef4444; }
+    .toast i { font-size: 18px; }
+    .toast.success i { color: var(--accent); } .toast.error i { color: #ef4444; }
+    @keyframes toastEnter { from { opacity: 0; transform: translateX(100%); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes toastExit { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(100%); } }
+
+    @media (max-width: 768px) {
+        body { padding: 12px; align-items: flex-start; }
+        .header-container { flex-direction: column; align-items: flex-start; margin-bottom: 16px; }
+        .htitle { font-size: 22px; }
+        .header-actions { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
+        .btn-top { justify-content: center; font-size: 12px; padding: 10px 8px; }
+        .bottombar { justify-content: stretch; }
+        .btn-group { flex-wrap: wrap; width: 100%; }
+        .btn-group button { flex: 1; justify-content: center; padding: 10px 8px; }
+        .history-item { flex-direction: column; align-items: flex-start; gap: 12px; }
+        .history-actions { width: 100%; justify-content: flex-end; }
+        .editor-wrap { height: clamp(300px, calc(100dvh - 360px), 560px); }
+        .sb-hide-sm { display: none; }
+        #toast-container { left: 12px; right: 12px; bottom: 12px; }
+    }
+</style>
+</head>
+<body>
+<div class="shell">
+    <div class="header-container">
+        <div class="header-left">
+            <div class="hicon"><i class="fas fa-bolt"></i></div>
+            <div>
+                <div class="htitle">HTML Live Preview</div>
+                <div class="hsub">Telegram DB Powered: Save • Backup • Restore</div>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button class="btn-top" onclick="downloadBackup(false)"><i class="fas fa-download"></i> Backup JSON</button>
+            <button class="btn-top" onclick="document.getElementById('uploadJson').click()"><i class="fas fa-upload"></i> Restore</button>
+            <input type="file" id="uploadJson" accept=".json" style="display: none;" onchange="handleRestore(event)">
+            <button class="btn-top" style="background: rgba(16, 185, 129, 0.15); color: var(--accent); border-color: rgba(16, 185, 129, 0.3);" onclick="toggleHistoryModal()"><i class="fas fa-history"></i> DB History</button>
+            <a class="btn-top" href="/md/" title="Markdown preview links"><i class="fab fa-markdown"></i> Markdown</a>
+        </div>
+    </div>
+
+    <div class="card">
+        <!-- VS Code style tab strip -->
+        <div class="tabbar">
+            <div class="tab">
+                <i class="fab fa-html5"></i>
+                <span id="displayFileName">untitled.html</span>
+                <span class="dirty" id="dirtyDot" title="Unsaved changes"></span>
+            </div>
+            <div class="tab-tools">
+                <button class="tab-btn" onclick="runCode()" title="Preview (Ctrl+Enter)"><i class="fas fa-play"></i></button>
+            </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="toolbar" id="toolbar">
+            <button class="tb-btn save" data-act="save"><i class="fas fa-save"></i> Save</button>
+            <span class="tb-sep"></span>
+            <button class="tb-btn" data-act="undo" title="Undo"><i class="fas fa-undo"></i></button>
+            <button class="tb-btn" data-act="redo" title="Redo"><i class="fas fa-redo"></i></button>
+            <span class="tb-sep"></span>
+            <button class="tb-btn" data-act="copy"><i class="fas fa-copy"></i> Copy</button>
+            <button class="tb-btn" data-act="paste"><i class="fas fa-paste"></i> Paste</button>
+            <button class="tb-btn" data-act="cut"><i class="fas fa-cut"></i> Cut</button>
+            <button class="tb-btn" data-act="all">All</button>
+            <span class="tb-sep"></span>
+            <button class="tb-btn" data-act="find"><i class="fas fa-search"></i> Find</button>
+            <button class="tb-btn" data-act="format"><i class="fas fa-align-left"></i> Format</button>
+            <button class="tb-btn" data-act="wrap" id="wrapBtn"><i class="fas fa-level-down-alt"></i> Wrap</button>
+            <span class="tb-sep"></span>
+            <button class="tb-btn" data-act="fontdown" title="Smaller text">A−</button>
+            <button class="tb-btn" data-act="fontup" title="Bigger text">A+</button>
+        </div>
+
+        <div class="editor-wrap"><div id="editor"></div></div>
+
+        <!-- Status bar -->
+        <div class="statusbar">
+            <div class="sb-left">
+                <span class="sb-item" id="sbPos">Ln 1, Col 1</span>
+                <span class="sb-item" id="sbSel" hidden></span>
+            </div>
+            <div class="sb-right">
+                <span class="sb-item" id="sbLines">1 line</span>
+                <span class="sb-item sb-hide-sm">Spaces: 2</span>
+                <span class="sb-item sb-hide-sm">UTF-8</span>
+                <span class="sb-item"><i class="fab fa-html5"></i> HTML</span>
+            </div>
+        </div>
+
+        <div class="bottombar">
+            <div class="btn-group">
+                <button class="btn-clear" onclick="clearEditor()"><i class="fas fa-trash-alt"></i> CLEAR</button>
+                <button class="btn-save" id="saveBtn" onclick="saveCurrentCode()"><i class="fas fa-save"></i> SAVE DB</button>
+                <button class="btn-run" id="runBtn" onclick="runCode()"><i class="fas fa-play"></i> PREVIEW</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- DB History Modal -->
+<div class="modal-overlay" id="historyModal">
+    <div class="modal-card">
+        <div class="modal-header">
+            <div class="modal-title"><i class="fas fa-database" style="color: var(--accent)"></i> Saved Projects</div>
+            <button class="btn-close-modal" onclick="toggleHistoryModal()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="history-list" id="historyList"></div>
+    </div>
+</div>
+
+<!-- Custom UI Confirm Modal -->
+<div class="modal-overlay" id="customConfirm">
+    <div class="modal-card mini-modal-card">
+        <div class="mini-modal-icon"><i class="fas fa-exclamation-triangle"></i></div>
+        <div class="mini-modal-title" id="confirmMsg">Are you sure?</div>
+        <div class="modal-actions">
+            <button class="btn-top" id="confirmCancel">Cancel</button>
+            <button class="btn-clear" id="confirmOk" style="background: #ef4444; color: white;">Yes, Proceed</button>
+        </div>
+    </div>
+</div>
+
+<!-- Custom UI Prompt Modal -->
+<div class="modal-overlay" id="customPrompt">
+    <div class="modal-card mini-modal-card">
+        <div class="mini-modal-title" id="promptMsg" style="margin-bottom: 16px; text-align: left;">Enter details:</div>
+        <input type="text" id="promptInput" class="modal-input" autocomplete="off" />
+        <div class="modal-actions" style="justify-content: flex-end;">
+            <button class="btn-top" id="promptCancel">Cancel</button>
+            <button class="btn-save" id="promptOk" style="background: var(--accent); color: black;">Save DB</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toasts Container -->
+<div id="toast-container"></div>
+
+<!-- Ace editor (virtualised rendering, so large files stay fast on phones) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.9/ace.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.9/mode-html.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.9/mode-css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.9/mode-javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.9/ext-searchbox.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.9/ext-beautify.min.js"></script>
+
+<script>
+    // --- API Configuration Details ---
+    const BASE_URL = 'https://unknown-02-fz-bot.hf.space';
+    const API_KEY = 'a5783faf5914ee41108775bc';
+
+    const ACE_BASE = 'https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.9/';
+
+    const historyModal = document.getElementById('historyModal');
+    const historyList = document.getElementById('historyList');
+    const displayFileName = document.getElementById('displayFileName');
+    const dirtyDot = document.getElementById('dirtyDot');
+    const sbPos = document.getElementById('sbPos');
+    const sbSel = document.getElementById('sbSel');
+    const sbLines = document.getElementById('sbLines');
+
+    let projectsHistory = [];
+    let currentProjectName = null;
+
+    function esc(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function getPref(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } }
+    function setPref(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* storage blocked */ } }
+
+    // --- Toast Notifications ---
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+        const i = document.createElement('i'); i.className = `fas ${icon}`;
+        const span = document.createElement('span'); span.textContent = message;
+        toast.appendChild(i); toast.appendChild(span);
+        container.appendChild(toast);
+        setTimeout(() => { toast.style.animation = 'toastExit 0.4s forwards'; setTimeout(() => toast.remove(), 400); }, 3000);
+    }
+
+    // --- Custom UI Replacements for alert/confirm/prompt ---
+    function uiConfirm(message, onConfirm, onCancel = null) {
+        const modal = document.getElementById('customConfirm');
+        document.getElementById('confirmMsg').textContent = message;
+        modal.classList.add('active');
+
+        const btnOk = document.getElementById('confirmOk');
+        const btnCancel = document.getElementById('confirmCancel');
+
+        const newOk = btnOk.cloneNode(true);
+        const newCancel = btnCancel.cloneNode(true);
+        btnOk.parentNode.replaceChild(newOk, btnOk);
+        btnCancel.parentNode.replaceChild(newCancel, btnCancel);
+
+        newOk.onclick = () => { modal.classList.remove('active'); onConfirm(); };
+        newCancel.onclick = () => { modal.classList.remove('active'); if (onCancel) onCancel(); };
+    }
+
+    function uiPrompt(message, defaultValue, onSubmit) {
+        const modal = document.getElementById('customPrompt');
+        document.getElementById('promptMsg').textContent = message;
+        const input = document.getElementById('promptInput');
+        input.value = defaultValue || '';
+        modal.classList.add('active');
+        input.focus();
+
+        const btnOk = document.getElementById('promptOk');
+        const btnCancel = document.getElementById('promptCancel');
+
+        const newOk = btnOk.cloneNode(true);
+        const newCancel = btnCancel.cloneNode(true);
+        btnOk.parentNode.replaceChild(newOk, btnOk);
+        btnCancel.parentNode.replaceChild(newCancel, btnCancel);
+
+        const submitAction = () => {
+            const val = document.getElementById('promptInput').value.trim();
+            if (val) { modal.classList.remove('active'); onSubmit(val); }
+            else { showToast("Name cannot be empty!", "error"); }
+        };
+
+        newOk.onclick = submitAction;
+        newCancel.onclick = () => { modal.classList.remove('active'); };
+
+        input.onkeydown = (e) => { if (e.key === 'Enter') submitAction(); };
+    }
+
+    // =====================================================================
+    //  EDITOR (Ace, VS Code Dark+ look). Falls back to a plain textarea if
+    //  the Ace files cannot be loaded, so the tool never becomes unusable.
+    // =====================================================================
+    let editor = null;
+    let fallbackTa = null;
+    let suppressDirty = false;
+
+    function defineTheme() {
+        const css = [
+            '.ace-vscode-dark{background-color:#151923;color:#d4d4d4}',
+            '.ace-vscode-dark .ace_gutter{background:#151923;color:#5b6379}',
+            '.ace-vscode-dark .ace_gutter-active-line{background-color:#1b2130;color:#c6c6c6}',
+            '.ace-vscode-dark .ace_print-margin{width:1px;background:#2a3144}',
+            '.ace-vscode-dark .ace_cursor{color:#aeafad}',
+            '.ace-vscode-dark .ace_marker-layer .ace_selection{background:#264f78}',
+            '.ace-vscode-dark.ace_multiselect .ace_selection.ace_start{box-shadow:0 0 3px 0 #151923}',
+            '.ace-vscode-dark .ace_marker-layer .ace_step{background:rgb(102,82,0)}',
+            '.ace-vscode-dark .ace_marker-layer .ace_bracket{margin:-1px 0 0 -1px;border:1px solid #888}',
+            '.ace-vscode-dark .ace_marker-layer .ace_active-line{background:#1b2130}',
+            '.ace-vscode-dark .ace_marker-layer .ace_selected-word{border:1px solid #3a3d41;background:rgba(58,61,65,.4)}',
+            '.ace-vscode-dark .ace_indent-guide{box-shadow:inset -1px 0 0 #2a3144}',
+            '.ace-vscode-dark .ace_invisible{color:#3b4252}',
+            '.ace-vscode-dark .ace_fold-widget{opacity:.8}',
+            '.ace-vscode-dark .ace_placeholder{color:#5b6379;font-style:italic}',
+            '.ace-vscode-dark .ace_fold{background-color:#3a3d41;border-color:#d4d4d4}',
+            /* generic tokens */
+            '.ace-vscode-dark .ace_keyword{color:#c586c0}',
+            '.ace-vscode-dark .ace_keyword.ace_operator{color:#d4d4d4}',
+            '.ace-vscode-dark .ace_storage{color:#569cd6}',
+            '.ace-vscode-dark .ace_constant.ace_language{color:#569cd6}',
+            '.ace-vscode-dark .ace_constant.ace_numeric{color:#b5cea8}',
+            '.ace-vscode-dark .ace_constant.ace_character,.ace-vscode-dark .ace_constant.ace_other{color:#4fc1ff}',
+            '.ace-vscode-dark .ace_support.ace_function{color:#dcdcaa}',
+            '.ace-vscode-dark .ace_support.ace_constant{color:#4fc1ff}',
+            '.ace-vscode-dark .ace_support.ace_class,.ace-vscode-dark .ace_support.ace_type{color:#4ec9b0}',
+            '.ace-vscode-dark .ace_entity.ace_name.ace_function{color:#dcdcaa}',
+            '.ace-vscode-dark .ace_variable{color:#9cdcfe}',
+            '.ace-vscode-dark .ace_variable.ace_language{color:#569cd6}',
+            '.ace-vscode-dark .ace_string{color:#ce9178}',
+            '.ace-vscode-dark .ace_string.ace_regexp,.ace-vscode-dark .ace_regexp{color:#d16969}',
+            '.ace-vscode-dark .ace_comment{color:#6a9955;font-style:italic}',
+            '.ace-vscode-dark .ace_invalid{color:#f44747}',
+            '.ace-vscode-dark .ace_paren,.ace-vscode-dark .ace_punctuation{color:#d4d4d4}',
+            /* html / xml tokens */
+            '.ace-vscode-dark .ace_meta.ace_tag{color:#569cd6}',
+            '.ace-vscode-dark .ace_meta.ace_tag.ace_punctuation{color:#808080}',
+            '.ace-vscode-dark .ace_entity.ace_other.ace_attribute-name{color:#9cdcfe}',
+            '.ace-vscode-dark .ace_text-layer .ace_xml-pe{color:#c586c0}',
+            /* css tokens */
+            '.ace-vscode-dark .ace_support.ace_type.ace_property-name{color:#9cdcfe}'
+        ].join('\n');
+        ace.define('ace/theme/vscode_dark', ['require', 'exports', 'module', 'ace/lib/dom'], function (require, exports) {
+            exports.isDark = true;
+            exports.cssClass = 'ace-vscode-dark';
+            exports.cssText = css;
+            const dom = require('../lib/dom');
+            dom.importCssString(exports.cssText, exports.cssClass, false);
+        });
+    }
+
+    function initEditor() {
+        const host = document.getElementById('editor');
+        if (window.ace) {
+            try {
+                ace.config.set('basePath', ACE_BASE);
+                defineTheme();
+                editor = ace.edit(host, {
+                    mode: 'ace/mode/html',
+                    theme: 'ace/theme/vscode_dark',
+                    useWorker: false,
+                    showPrintMargin: false,
+                    tabSize: 2,
+                    useSoftTabs: true,
+                    fontSize: parseInt(getPref('hlp-font', '14'), 10) || 14,
+                    fontFamily: "'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace",
+                    highlightActiveLine: true,
+                    highlightGutterLine: true,
+                    showFoldWidgets: true,
+                    fadeFoldWidgets: false,
+                    displayIndentGuides: true,
+                    animatedScroll: false,
+                    scrollPastEnd: 0.3,
+                    wrap: getPref('hlp-wrap', '0') === '1',
+                    behavioursEnabled: true
+                });
+                try { editor.setOption('placeholder', '<!-- Paste your HTML here -->'); } catch (e) { /* older build */ }
+                editor.session.setUseWrapMode(getPref('hlp-wrap', '0') === '1');
+                editor.on('change', () => { if (!suppressDirty) setDirty(true); refreshStatus(); });
+                editor.selection.on('changeCursor', refreshStatus);
+                editor.selection.on('changeSelection', refreshStatus);
+                if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => editor.renderer.updateFontSize());
+                window.addEventListener('resize', () => editor.resize());
+                updateWrapButton();
+                refreshStatus();
+                return;
+            } catch (err) {
+                console.error('Ace failed, using plain editor:', err);
+                editor = null;
+                host.innerHTML = '';
+            }
+        }
+        fallbackTa = document.createElement('textarea');
+        fallbackTa.className = 'fallback-ta';
+        fallbackTa.spellcheck = false;
+        fallbackTa.placeholder = '<!-- Paste your HTML here -->';
+        host.appendChild(fallbackTa);
+        fallbackTa.addEventListener('input', () => { if (!suppressDirty) setDirty(true); refreshStatus(); });
+        ['keyup', 'click', 'select'].forEach(ev => fallbackTa.addEventListener(ev, refreshStatus));
+        showToast('Editor library could not load. Using the basic editor.', 'error');
+        refreshStatus();
+    }
+
+    const Ed = {
+        get() { return editor ? editor.getValue() : fallbackTa.value; },
+        set(v) {
+            suppressDirty = true;
+            if (editor) { editor.setValue(v, -1); try { editor.session.getUndoManager().reset(); } catch (e) { /* ignore */ } }
+            else { fallbackTa.value = v; }
+            suppressDirty = false;
+            setDirty(false);
+            refreshStatus();
+        },
+        focus() { if (editor) editor.focus(); else fallbackTa.focus(); },
+        selected() {
+            if (editor) return editor.getSelectedText();
+            return fallbackTa.value.substring(fallbackTa.selectionStart, fallbackTa.selectionEnd);
+        },
+        insert(text) {
+            if (editor) { editor.insert(text); return; }
+            const s = fallbackTa.selectionStart, e = fallbackTa.selectionEnd;
+            fallbackTa.setRangeText(text, s, e, 'end');
+            fallbackTa.dispatchEvent(new Event('input'));
+        },
+        removeSelection() {
+            if (editor) { editor.session.remove(editor.getSelectionRange()); return; }
+            const s = fallbackTa.selectionStart, e = fallbackTa.selectionEnd;
+            fallbackTa.setRangeText('', s, e, 'end');
+            fallbackTa.dispatchEvent(new Event('input'));
+        },
+        selectAll() { if (editor) editor.selectAll(); else fallbackTa.select(); }
+    };
+
+    function setDirty(on) { dirtyDot.classList.toggle('on', !!on); }
+
+    function refreshStatus() {
+        let line, col, lines, selLen;
+        if (editor) {
+            const pos = editor.getCursorPosition();
+            line = pos.row + 1; col = pos.column + 1;
+            lines = editor.session.getLength();
+            selLen = editor.selection.isEmpty() ? 0 : editor.getSelectedText().length;
+        } else if (fallbackTa) {
+            const v = fallbackTa.value, p = fallbackTa.selectionStart;
+            const before = v.substring(0, p);
+            line = before.split('\n').length; col = p - before.lastIndexOf('\n');
+            lines = v === '' ? 1 : v.split('\n').length;
+            selLen = fallbackTa.selectionEnd - fallbackTa.selectionStart;
+        } else { return; }
+        sbPos.textContent = `Ln ${line}, Col ${col}`;
+        sbLines.textContent = lines + (lines === 1 ? ' line' : ' lines');
+        if (selLen > 0) { sbSel.hidden = false; sbSel.textContent = `(${selLen} selected)`; } else { sbSel.hidden = true; }
+    }
+
+    function updateWrapButton() {
+        const on = editor ? editor.session.getUseWrapMode() : false;
+        document.getElementById('wrapBtn').classList.toggle('active', on);
+    }
+
+    // --- Toolbar actions ---
+    async function copyAction() {
+        const sel = Ed.selected();
+        const text = sel || Ed.get();
+        if (!text) return showToast("Editor is empty. Nothing to copy!", 'error');
+        try { await navigator.clipboard.writeText(text); showToast(sel ? "Selection copied!" : "All code copied!"); }
+        catch (err) { showToast("Copy failed!", 'error'); }
+    }
+    async function pasteAction() {
+        try {
+            const text = await navigator.clipboard.readText();
+            if (!text) return showToast("Clipboard is empty.", 'error');
+            Ed.insert(text); Ed.focus(); showToast("Pasted successfully!");
+        } catch (err) { showToast("Clipboard permission required.", 'error'); }
+    }
+    async function cutAction() {
+        const sel = Ed.selected();
+        if (!sel) return showToast("Select some text to cut.", 'error');
+        try { await navigator.clipboard.writeText(sel); Ed.removeSelection(); Ed.focus(); showToast("Cut to clipboard!"); }
+        catch (err) { showToast("Cut failed!", 'error'); }
+    }
+    function formatAction() {
+        if (!editor) return showToast("Formatting needs the full editor.", 'error');
+        try { ace.require('ace/ext/beautify').beautify(editor.session); showToast("Code formatted!"); editor.focus(); }
+        catch (err) { showToast("Could not format this code.", 'error'); }
+    }
+    function changeFont(delta) {
+        if (!editor) return;
+        const next = Math.min(22, Math.max(11, (parseInt(editor.getFontSize(), 10) || 14) + delta));
+        editor.setFontSize(next); setPref('hlp-font', String(next));
+    }
+
+    document.getElementById('toolbar').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-act]');
+        if (!b) return;
+        switch (b.dataset.act) {
+            case 'save': saveCurrentCode(); break;
+            case 'undo': if (editor) { editor.undo(); editor.focus(); } else document.execCommand('undo'); break;
+            case 'redo': if (editor) { editor.redo(); editor.focus(); } else document.execCommand('redo'); break;
+            case 'copy': copyAction(); break;
+            case 'paste': pasteAction(); break;
+            case 'cut': cutAction(); break;
+            case 'all': Ed.selectAll(); Ed.focus(); break;
+            case 'find': if (editor) editor.execCommand('find'); else showToast("Search needs the full editor.", 'error'); break;
+            case 'format': formatAction(); break;
+            case 'wrap':
+                if (editor) {
+                    const on = !editor.session.getUseWrapMode();
+                    editor.session.setUseWrapMode(on); setPref('hlp-wrap', on ? '1' : '0'); updateWrapButton();
+                }
+                break;
+            case 'fontdown': changeFont(-1); break;
+            case 'fontup': changeFont(1); break;
+        }
+    });
+
+    function runCode() {
+        if (!Ed.get().trim()) return showToast("Please write some code before previewing!", 'error');
+        const previewWindow = window.open("", "_blank");
+        if (!previewWindow) return showToast("Pop-up blocked. Please allow pop-ups for this site.", 'error');
+        previewWindow.document.open(); previewWindow.document.write(Ed.get()); previewWindow.document.close();
+    }
+
+    // --- API / Database Logic (Updated with Read-Modify-Write for Shallow Merges) ---
+    async function executeSave(name, code) {
+        currentProjectName = name;
+        displayFileName.textContent = name + '.html';
+
+        const btn = document.getElementById('saveBtn');
+        const originalHTML = btn.innerHTML;
+        try {
+            btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> SAVING...`;
+
+            // 1. Pehle pura data fetch karna padega kyuki API nested structures overwrite karti hai
+            const readRes = await fetch(`${BASE_URL}/api/read`, {
+                headers: { 'X-API-Key': API_KEY }
+            });
+            const currentData = await readRes.json();
+            const allProjects = (currentData.data && currentData.data.projects) ? currentData.data.projects : {};
+
+            // 2. Apne project ko update karna
+            allProjects[name] = {
+                name: name,
+                code: code,
+                date: new Date().toLocaleString()
+            };
+
+            // 3. Phir pure updated array/object ko dubara push karna (Deep Merge)
+            const writeRes = await fetch(`${BASE_URL}/api/write`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': API_KEY
+                },
+                body: JSON.stringify({ projects: allProjects })
+            });
+
+            const writeData = await writeRes.json();
+
+            btn.innerHTML = originalHTML;
+            if (writeData.status === 'success') {
+                setDirty(false);
+                showToast(`Project '${name}' saved successfully!`);
+            } else {
+                showToast(writeData.message || "An error occurred while saving.", 'error');
+            }
+        } catch (e) { btn.innerHTML = originalHTML; showToast("Server is offline or connection error.", 'error'); console.error(e); }
+    }
+
+    function saveCurrentCode() {
+        const code = Ed.get().trim();
+        if (!code) return showToast("Please write some code first!", 'error');
+
+        if (currentProjectName) {
+            executeSave(currentProjectName, code);
+        } else {
+            uiPrompt("Enter a unique name for this project (e.g., mypage):", "", (name) => {
+                executeSave(name, code);
+            });
+        }
+    }
+
+    async function loadHistoryFromDB() {
+        try {
+            const res = await fetch(`${BASE_URL}/api/read`, {
+                headers: { 'X-API-Key': API_KEY }
+            });
+            const json = await res.json();
+
+            if (json.status === 'success') {
+                const projectsObj = (json.data && json.data.projects) ? json.data.projects : {};
+                projectsHistory = Object.values(projectsObj);
+                renderHistoryList();
+            } else {
+                showToast("Failed to load history.", 'error');
+            }
+        } catch (e) { console.error("History fetch error:", e); }
+    }
+
+    function deleteProjectFromDB(name) {
+        uiConfirm(`Are you sure you want to delete '${name}' from the database?`, async () => {
+            try {
+                // Fetch, Delete key, and Write baaki sab
+                const readRes = await fetch(`${BASE_URL}/api/read`, { headers: { 'X-API-Key': API_KEY } });
+                const currentData = await readRes.json();
+                let allProjects = (currentData.data && currentData.data.projects) ? currentData.data.projects : {};
+
+                delete allProjects[name];
+
+                const writeRes = await fetch(`${BASE_URL}/api/write`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+                    body: JSON.stringify({ projects: allProjects })
+                });
+
+                const writeData = await writeRes.json();
+
+                if (writeData.status === 'success') {
+                    showToast("Project Deleted!", 'success');
+                    loadHistoryFromDB();
+                } else showToast("Deletion failed! Server error.", 'error');
+            } catch (e) { showToast("Deletion failed! Connection error.", 'error'); }
+        });
+    }
+
+    function toggleHistoryModal() {
+        if (historyModal.classList.contains('active')) { historyModal.classList.remove('active'); }
+        else { loadHistoryFromDB(); historyModal.classList.add('active'); }
+    }
+
+    // The preview address (blob) is only built when the link is touched, so opening
+    // the history list stays instant even with many large projects.
+    function prepareBlobLink(a) {
+        if (a.dataset.ready) return;
+        const proj = projectsHistory.find(p => p.name === a.dataset.name);
+        if (!proj) return;
+        a.href = URL.createObjectURL(new Blob([proj.code], { type: 'text/html' }));
+        a.dataset.ready = '1';
+    }
+
+    function renderHistoryList() {
+        historyList.innerHTML = '';
+        if (projectsHistory.length === 0) { historyList.innerHTML = `<div class="empty-history">No projects saved in the database yet.</div>`; return; }
+
+        projectsHistory.forEach((proj) => {
+            const item = document.createElement('div');
+            item.className = 'history-item';
+            const safeName = esc(proj.name);
+
+            item.innerHTML = `
+                <div class="history-info">
+                    <div class="history-name">${safeName}</div>
+                    <div class="history-date"><i class="far fa-clock"></i> ${esc(proj.date || 'No Date')}</div>
+                    <a class="preview-link" href="#" target="_blank" rel="noopener" data-name="${safeName}"><i class="fas fa-external-link-alt"></i> Open Live Preview</a>
+                </div>
+                <div class="history-actions">
+                    <button class="btn-load" data-name="${encodeURIComponent(proj.name)}" onclick="loadToEditor(decodeURIComponent(this.dataset.name))"><i class="fas fa-upload"></i> Load</button>
+                    <button class="btn-del" data-name="${encodeURIComponent(proj.name)}" onclick="deleteProjectFromDB(decodeURIComponent(this.dataset.name))"><i class="fas fa-trash"></i> Delete</button>
+                </div>
+            `;
+            const link = item.querySelector('.preview-link');
+            ['pointerdown', 'touchstart', 'mouseenter', 'focus'].forEach(ev => link.addEventListener(ev, () => prepareBlobLink(link), { passive: true }));
+            link.addEventListener('click', (e) => { if (!link.dataset.ready) { e.preventDefault(); prepareBlobLink(link); window.open(link.href, '_blank'); } });
+            historyList.appendChild(item);
+        });
+    }
+
+    function loadToEditor(name) {
+        const proj = projectsHistory.find(p => p.name === name);
+        if (proj) {
+            Ed.set(proj.code);
+            currentProjectName = proj.name;
+            displayFileName.textContent = proj.name + '.html';
+            toggleHistoryModal();
+            Ed.focus();
+            showToast(`Loaded '${name}' successfully!`);
+        }
+    }
+
+    function clearEditor() {
+        uiConfirm("Are you sure you want to clear the editor?", () => {
+            Ed.set('');
+            currentProjectName = null;
+            displayFileName.textContent = 'untitled.html';
+            Ed.focus();
+        });
+    }
+
+    // --- JSON BACKUP & RESTORE LOGIC ---
+    async function downloadBackup(isAuto = false) {
+        try {
+            const res = await fetch(`${BASE_URL}/api/read`, { headers: { 'X-API-Key': API_KEY } });
+            const json = await res.json();
+
+            if (json.status === 'success') {
+                const backupData = JSON.stringify(json.data, null, 2);
+                const blob = new Blob([backupData], { type: 'application/json' });
+                const url = window.URL.createObjectURL(blob);
+
+                const a = document.createElement('a'); a.href = url;
+                a.download = isAuto ? "auto_backup_before_restore.json" : "db_full_backup.json";
+                document.body.appendChild(a); a.click(); a.remove(); window.URL.revokeObjectURL(url);
+                if (!isAuto) showToast("Backup Downloaded!");
+            } else {
+                showToast("Failed to fetch database for backup.", 'error');
+            }
+        } catch (e) { console.error(e); showToast("Backup error.", 'error'); }
+    }
+
+    function handleRestore(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        uiConfirm("New data is being uploaded. Your current database will be automatically downloaded as a backup first. Do you want to continue?", async () => {
+            await downloadBackup(true);
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+
+                    const writeRes = await fetch(`${BASE_URL}/api/write`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+                        body: JSON.stringify(importedData)
+                    });
+
+                    const writeJson = await writeRes.json();
+
+                    if (writeJson.status === 'success') {
+                        showToast("Data restored successfully!");
+                        loadHistoryFromDB();
+                    } else showToast("Restore failed.", 'error');
+                } catch (err) {
+                    showToast("Invalid JSON file.", 'error');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }, () => { event.target.value = ''; });
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+            e.preventDefault();
+            saveCurrentCode();
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            runCode();
+        }
+    });
+    window.addEventListener('DOMContentLoaded', () => { initEditor(); Ed.focus(); });
+</script>
+</body>
+</html>
