@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#090d16">
+<title>ZIP to AI Flattener</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: { extend: { fontFamily: { sans: ['Inter','sans-serif'], mono: ['JetBrains Mono','monospace'] } } }
+  }
+</script>
+<style>
+  html { -webkit-text-size-adjust: 100%; }
+  body { padding-bottom: env(safe-area-inset-bottom); }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: #0f172a; }
+  ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+  .drop-active { border-color: #6366f1 !important; background: rgba(99,102,241,.12) !important; }
+  .panel-hidden { display: none; }
+  @media (min-width: 1024px) { .panel-hidden { display: flex !important; } }
+  input[type=checkbox] { accent-color: #6366f1; }
+  details > summary { list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] .chev { transform: rotate(180deg); }
+  textarea { -webkit-overflow-scrolling: touch; }
+  button { -webkit-tap-highlight-color: transparent; }
+</style>
+</head>
+<body class="bg-slate-950 text-slate-200 font-sans min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white">
+
+<!-- Header -->
+<header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-30">
+  <div class="max-w-7xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-2">
+    <div class="flex items-center gap-2.5 min-w-0">
+      <div class="bg-indigo-600/20 border border-indigo-500/30 p-1.5 rounded-lg text-indigo-400 shrink-0">
+        <i data-lucide="folder-git-2" class="w-5 h-5"></i>
+      </div>
+      <div class="min-w-0">
+        <h1 class="text-base font-bold text-white truncate leading-tight">ZIP to AI Flattener</h1>
+        <p class="text-[11px] text-slate-400 leading-tight truncate">Tree on top + all code below, in one file</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 shrink-0">
+      <button id="demoBtn" class="h-10 px-3 text-xs font-medium rounded-lg bg-slate-800 active:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1.5">
+        <i data-lucide="sparkles" class="w-4 h-4 text-amber-400"></i><span class="hidden sm:inline">Demo ZIP</span><span class="sm:hidden">Demo</span>
+      </button>
+      <button id="resetBtn" class="hidden h-10 px-3 text-xs font-medium rounded-lg bg-slate-800 active:bg-rose-950 text-slate-300 border border-slate-700 items-center gap-1.5">
+        <i data-lucide="rotate-ccw" class="w-4 h-4"></i><span>New</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 py-4 flex flex-col gap-4 pb-28 lg:pb-6">
+
+  <!-- Upload -->
+  <section id="uploadSection" class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div class="lg:col-span-2">
+      <label id="dropZone" for="zipInput" class="group flex flex-col items-center justify-center w-full h-48 sm:h-64 border-2 border-dashed border-slate-700 rounded-2xl bg-slate-900/50 active:bg-slate-900 hover:border-indigo-500 transition cursor-pointer p-5 text-center">
+        <input id="zipInput" type="file" accept=".zip,application/zip,application/x-zip-compressed" class="hidden">
+        <div class="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mb-3">
+          <i data-lucide="file-archive" class="w-7 h-7"></i>
+        </div>
+        <h2 class="text-base font-semibold text-white mb-1">Tap to choose your <span class="text-indigo-400 font-mono">.zip</span></h2>
+        <p class="text-xs text-slate-400 max-w-xs">Ya yahan drag &amp; drop karo. Sab kuch aapke browser mein hi hota hai, upload nahi hota.</p>
+      </label>
+    </div>
+
+    <!-- Filters (collapsible) -->
+    <details class="bg-slate-900/70 border border-slate-800 rounded-2xl" id="filtersBox">
+      <summary class="flex items-center justify-between gap-2 p-4 cursor-pointer select-none min-h-[52px]">
+        <span class="flex items-center gap-2">
+          <i data-lucide="sliders-horizontal" class="w-4 h-4 text-indigo-400"></i>
+          <span class="text-sm font-semibold text-white">Smart Filters &amp; Format</span>
+        </span>
+        <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 chev transition-transform"></i>
+      </summary>
+      <div class="px-4 pb-4 space-y-1 text-sm border-t border-slate-800 pt-3">
+        <label class="flex items-start gap-3 py-2 cursor-pointer">
+          <input type="checkbox" id="optJunk" checked class="mt-0.5 w-5 h-5 shrink-0">
+          <span><span class="font-medium text-slate-200 block text-sm">Ignore heavy/build folders</span>
+          <span class="text-xs text-slate-400 font-mono">node_modules, .git, dist, build, .next, __pycache__, vendor</span></span>
+        </label>
+        <label class="flex items-start gap-3 py-2 cursor-pointer">
+          <input type="checkbox" id="optLock" checked class="mt-0.5 w-5 h-5 shrink-0">
+          <span><span class="font-medium text-slate-200 block text-sm">Skip lockfiles</span>
+          <span class="text-xs text-slate-400 font-mono">package-lock.json, yarn.lock, pnpm-lock.yaml</span></span>
+        </label>
+        <label class="flex items-start gap-3 py-2 cursor-pointer">
+          <input type="checkbox" id="optDot" class="mt-0.5 w-5 h-5 shrink-0">
+          <span><span class="font-medium text-slate-200 block text-sm">Ignore hidden dotfiles</span>
+          <span class="text-xs text-slate-400 font-mono">.env, .gitignore, .eslintrc (.DS_Store always skipped)</span></span>
+        </label>
+        <label class="flex items-start gap-3 py-2 cursor-pointer">
+          <input type="checkbox" id="optFence" checked class="mt-0.5 w-5 h-5 shrink-0">
+          <span><span class="font-medium text-slate-200 block text-sm">Wrap code in markdown fences</span>
+          <span class="text-xs text-slate-400">Har file ka code code-block mein, AI ke liye better</span></span>
+        </label>
+        <label class="flex items-start gap-3 py-2 cursor-pointer">
+          <input type="checkbox" id="optLineNo" class="mt-0.5 w-5 h-5 shrink-0">
+          <span><span class="font-medium text-slate-200 block text-sm">Add line numbers</span>
+          <span class="text-xs text-slate-400">Bug/line reference ke liye useful</span></span>
+        </label>
+        <div class="pt-2">
+          <label class="block text-xs text-slate-400 mb-1.5 font-medium">Custom ignore (comma separated)</label>
+          <input type="text" id="optCustom" value=".min.js, .min.css, .map, .svg" autocapitalize="off" autocorrect="off" spellcheck="false"
+            class="w-full h-11 bg-slate-950 border border-slate-800 rounded-lg px-3 text-sm font-mono text-slate-200 focus:outline-none focus:border-indigo-500" placeholder=".svg, .map, .log">
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- Loading -->
+  <div id="loading" class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center">
+    <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-indigo-500/20 text-indigo-400 mb-3 animate-pulse">
+      <i data-lucide="cpu" class="w-6 h-6"></i>
+    </div>
+    <h3 class="text-base font-semibold text-white mb-1">Reading ZIP...</h3>
+    <p class="text-xs text-slate-400 font-mono break-all" id="loadingSub">Please wait</p>
+  </div>
+
+  <!-- Workspace -->
+  <section id="workspace" class="hidden flex-col gap-4">
+
+    <!-- Stats -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 min-w-0">
+        <span class="text-[11px] text-slate-400 block">Archive</span>
+        <span id="stName" class="text-sm font-semibold text-white truncate block font-mono mt-0.5">-</span>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-3">
+        <span class="text-[11px] text-slate-400 block">Included files</span>
+        <div class="mt-0.5"><span id="stFiles" class="text-sm font-bold text-emerald-400 font-mono">0</span>
+        <span class="text-[11px] text-slate-500 font-mono">/ <span id="stSkipped">0</span> skipped</span></div>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-3">
+        <span class="text-[11px] text-slate-400 block">Characters</span>
+        <span id="stChars" class="text-sm font-bold text-indigo-400 font-mono mt-0.5 block">0</span>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-3">
+        <span class="text-[11px] text-slate-400 block">~AI tokens</span>
+        <span id="stTokens" class="text-sm font-bold text-amber-400 font-mono mt-0.5 block">0</span>
+      </div>
+    </div>
+
+    <!-- Mobile tabs -->
+    <div class="grid grid-cols-2 gap-1 p-1 bg-slate-900 border border-slate-800 rounded-xl lg:hidden">
+      <button id="tabOut" class="h-11 rounded-lg text-sm font-semibold bg-indigo-600 text-white">Output</button>
+      <button id="tabFiles" class="h-11 rounded-lg text-sm font-semibold text-slate-300">Files <span id="tabCount" class="text-xs opacity-70"></span></button>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+
+      <!-- Files panel -->
+      <div id="panelFiles" class="panel-hidden lg:col-span-4 bg-slate-900 border border-slate-800 rounded-2xl flex-col h-[70vh] lg:h-[620px] overflow-hidden">
+        <div class="p-3 border-b border-slate-800 flex items-center justify-between">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-300">Select files</h3>
+          <div class="flex items-center">
+            <button id="selAll" class="h-9 px-3 text-xs text-indigo-400 font-medium">All</button>
+            <span class="text-slate-600">|</span>
+            <button id="selNone" class="h-9 px-3 text-xs text-slate-300 font-medium">None</button>
+          </div>
+        </div>
+        <div class="p-2.5 border-b border-slate-800 bg-slate-950/50">
+          <div class="relative">
+            <i data-lucide="search" class="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2"></i>
+            <input type="text" id="search" placeholder="Filter by name or path..." autocapitalize="off" autocorrect="off" spellcheck="false"
+              class="w-full h-11 bg-slate-900 border border-slate-800 rounded-lg pl-9 pr-3 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono">
+          </div>
+        </div>
+        <div id="checklist" class="flex-1 overflow-y-auto p-1.5 font-mono text-[13px]"></div>
+        <div class="p-2 border-t border-slate-800 bg-slate-950/80 text-[11px] text-slate-400 flex items-center justify-between">
+          <span>Uncheck karo to file output se hat jayegi</span>
+          <button id="viewSkipped" class="h-9 px-2 text-indigo-400">View skipped</button>
+        </div>
+      </div>
+
+      <!-- Output panel -->
+      <div id="panelOut" class="lg:col-span-8 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col h-[70vh] lg:h-[620px] overflow-hidden">
+        <div class="p-3 border-b border-slate-800 flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <i data-lucide="terminal" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-300 truncate">Single-file output</h3>
+          </div>
+          <span class="text-[11px] text-slate-400 bg-slate-800 px-2 py-1 rounded-md font-mono whitespace-nowrap">Tree → Code</span>
+        </div>
+        <textarea id="output" readonly spellcheck="false" wrap="off"
+          class="w-full flex-1 bg-slate-950 text-slate-200 font-mono text-xs leading-relaxed p-3 focus:outline-none resize-none selection:bg-indigo-500/40"
+          placeholder="Output yahan aayega..."></textarea>
+      </div>
+    </div>
+
+    <!-- Desktop action bar -->
+    <div class="hidden lg:flex items-center justify-end gap-2.5">
+      <button data-act="copy" class="inline-flex items-center gap-2 px-5 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm"><i data-lucide="copy" class="w-4 h-4"></i><span class="copyTxt">Copy full AI prompt</span></button>
+      <button data-act="txt" class="inline-flex items-center gap-2 px-4 h-11 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-sm font-medium"><i data-lucide="download" class="w-4 h-4 text-sky-400"></i>.TXT</button>
+      <button data-act="md" class="inline-flex items-center gap-2 px-4 h-11 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-sm font-medium"><i data-lucide="file-code" class="w-4 h-4 text-emerald-400"></i>.MD</button>
+    </div>
+  </section>
+</main>
+
+<!-- Mobile sticky action bar -->
+<div id="mobileBar" class="hidden fixed bottom-0 inset-x-0 z-40 lg:hidden bg-slate-900/95 backdrop-blur border-t border-slate-800 px-3 pt-2.5" style="padding-bottom: calc(env(safe-area-inset-bottom) + 10px)">
+  <div class="flex gap-2">
+    <button data-act="copy" class="flex-1 h-12 rounded-xl bg-indigo-600 active:bg-indigo-700 text-white font-semibold text-sm flex items-center justify-center gap-2"><i data-lucide="copy" class="w-4 h-4"></i><span class="copyTxt">Copy All</span></button>
+    <button data-act="txt" class="w-20 h-12 rounded-xl bg-slate-800 active:bg-slate-700 border border-slate-700 text-slate-200 font-semibold text-sm">.TXT</button>
+    <button data-act="md" class="w-20 h-12 rounded-xl bg-slate-800 active:bg-slate-700 border border-slate-700 text-slate-200 font-semibold text-sm">.MD</button>
+  </div>
+</div>
+
+<!-- Skipped modal -->
+<div id="skipModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden items-end sm:items-center justify-center sm:p-4">
+  <div class="bg-slate-900 border border-slate-800 sm:rounded-2xl rounded-t-2xl max-w-lg w-full max-h-[80vh] flex flex-col overflow-hidden shadow-2xl">
+    <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+      <div class="flex items-center gap-2"><i data-lucide="eye-off" class="w-4 h-4 text-rose-400"></i><h3 class="text-sm font-semibold text-white">Skipped files</h3></div>
+      <button id="skipClose" class="w-10 h-10 flex items-center justify-center text-slate-400 rounded-lg"><i data-lucide="x" class="w-5 h-5"></i></button>
+    </div>
+    <div id="skipList" class="p-4 overflow-y-auto font-mono text-xs text-slate-400 space-y-2 flex-1"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed left-1/2 -translate-x-1/2 bottom-24 lg:bottom-8 z-50 hidden px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-medium shadow-lg"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const state = { zipName: '', all: [], files: [], skipped: [], excluded: new Set(), collapsed: new Set(), loaded: false };
+
+const BIN_EXT = new Set(['png','jpg','jpeg','gif','webp','ico','bmp','tiff','mp3','wav','ogg','mp4','mov','avi','mkv','webm','pdf','zip','rar','7z','gz','tar','woff','woff2','ttf','otf','eot','exe','dll','so','dylib','bin','class','jar','pyc','o','a','apk','ipa','db','sqlite','psd','ai','doc','docx','xls','xlsx','ppt','pptx']);
+const JUNK = ['node_modules','.git','dist','build','.next','__pycache__','vendor','.idea','.vscode','venv','.venv','coverage','.cache'];
+const LOCK = ['package-lock.json','yarn.lock','pnpm-lock.yaml','Cargo.lock','composer.lock','Gemfile.lock','poetry.lock'];
+const LANG = { js:'javascript', mjs:'javascript', cjs:'javascript', jsx:'jsx', ts:'typescript', tsx:'tsx', py:'python', html:'html', htm:'html', css:'css', scss:'scss', json:'json', md:'markdown', sh:'bash', yml:'yaml', yaml:'yaml', java:'java', c:'c', h:'c', cpp:'cpp', go:'go', rs:'rust', php:'php', rb:'ruby', sql:'sql', xml:'xml', kt:'kotlin', swift:'swift', vue:'vue', svelte:'svelte', dart:'dart', txt:'' };
+const MAX_BYTES = 1024 * 1024;
+
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtSize = n => n < 1024 ? n + ' B' : (n / 1024).toFixed(1) + ' KB';
+const tick = () => new Promise(r => setTimeout(r, 0));
+const icons = () => { try { lucide.createIcons(); } catch (e) {} };
+
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.remove('hidden');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.add('hidden'), 1800);
+}
+
+/* ---------- Upload ---------- */
+$('zipInput').addEventListener('change', e => { if (e.target.files[0]) handleZip(e.target.files[0]); });
+const dz = $('dropZone');
+['dragenter','dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('drop-active'); }));
+['dragleave','drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('drop-active'); }));
+dz.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) handleZip(f); });
+$('demoBtn').onclick = loadDemo;
+$('resetBtn').onclick = resetApp;
+
+async function handleZip(file) {
+  try {
+    showLoading(true, file.name);
+    const zip = await JSZip.loadAsync(file);
+    await loadFromZip(zip, file.name);
+  } catch (err) {
+    showLoading(false);
+    alert('ZIP nahi khul paya: ' + err.message);
+  }
+}
+
+async function loadFromZip(zip, name) {
+  let entries = Object.values(zip.files).filter(f => !f.dir && !f.name.startsWith('__MACOSX/'));
+  let strip = '';
+  if (entries.length) {
+    const firsts = new Set(entries.map(f => f.name.split('/')[0]));
+    if (firsts.size === 1 && entries.every(f => f.name.includes('/'))) strip = [...firsts][0] + '/';
+  }
+  const all = [];
+  for (let i = 0; i < entries.length; i++) {
+    const f = entries[i];
+    $('loadingSub').textContent = (i + 1) + '/' + entries.length + '  ' + f.name;
+    all.push({ path: strip ? f.name.slice(strip.length) : f.name, u8: await f.async('uint8array') });
+    if (i % 20 === 0) await tick();
+  }
+  all.sort((a, b) => a.path.localeCompare(b.path));
+  state.zipName = name;
+  state.rootName = strip ? strip.slice(0, -1) : name.replace(/\.zip$/i, '');
+  state.all = all;
+  state.excluded = new Set();
+  state.collapsed = new Set();
+  state.loaded = true;
+  applyFilters();
+  showLoading(false);
+  $('uploadSection').classList.add('hidden');
+  $('workspace').classList.remove('hidden'); $('workspace').classList.add('flex');
+  $('resetBtn').classList.remove('hidden'); $('resetBtn').classList.add('flex');
+  $('mobileBar').classList.remove('hidden');
+  $('stName').textContent = name;
+  setTab('out');
+  renderChecklist();
+  generate();
+  icons();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function showLoading(on, sub) {
+  $('loading').classList.toggle('hidden', !on);
+  if (on) { $('loadingSub').textContent = sub || ''; $('uploadSection').classList.add('hidden'); }
+}
+
+function resetApp() {
+  state.all = []; state.files = []; state.skipped = []; state.loaded = false;
+  $('zipInput').value = ''; $('output').value = '';
+  $('workspace').classList.add('hidden'); $('workspace').classList.remove('flex');
+  $('resetBtn').classList.add('hidden'); $('resetBtn').classList.remove('flex');
+  $('mobileBar').classList.add('hidden');
+  $('uploadSection').classList.remove('hidden');
+}
+
+/* ---------- Filtering ---------- */
+function applyFilters() {
+  const junk = $('optJunk').checked, lock = $('optLock').checked, dot = $('optDot').checked;
+  const custom = $('optCustom').value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  const files = [], skipped = [];
+  const dec = new TextDecoder('utf-8');
+  for (const f of state.all) {
+    const parts = f.path.split('/'), base = parts[parts.length - 1], lower = f.path.toLowerCase();
+    const ext = base.includes('.') ? base.split('.').pop().toLowerCase() : '';
+    let reason = '';
+    if (base === '.DS_Store' || base === 'Thumbs.db') reason = 'system file';
+    else if (junk && parts.slice(0, -1).some(p => JUNK.includes(p))) reason = 'ignored folder';
+    else if (lock && LOCK.includes(base)) reason = 'lockfile';
+    else if (dot && parts.some(p => p.startsWith('.'))) reason = 'hidden dotfile';
+    else if (custom.some(c => lower.endsWith(c) || base.toLowerCase() === c)) reason = 'custom ignore';
+    else if (BIN_EXT.has(ext)) reason = 'binary file';
+    else if (f.u8.length > MAX_BYTES) reason = 'too large (' + fmtSize(f.u8.length) + ')';
+    else {
+      const n = Math.min(f.u8.length, 8000); let bin = false;
+      for (let i = 0; i < n; i++) if (f.u8[i] === 0) { bin = true; break; }
+      if (bin) reason = 'binary file';
+    }
+    if (reason) skipped.push({ path: f.path, reason });
+    else files.push({ path: f.path, size: f.u8.length, ext, text: dec.decode(f.u8).replace(/\r\n/g, '\n') });
+  }
+  state.files = files; state.skipped = skipped;
+}
+
+['optJunk','optLock','optDot'].forEach(id => $(id).addEventListener('change', reprocess));
+$('optCustom').addEventListener('input', reprocess);
+['optFence','optLineNo'].forEach(id => $(id).addEventListener('change', generate));
+
+function reprocess() {
+  if (!state.loaded) return;
+  applyFilters(); renderChecklist(); generate();
+}
+
+/* ---------- Checklist ---------- */
+function buildTree(paths) {
+  const root = {};
+  for (const p of paths) {
+    let node = root; const parts = p.split('/');
+    parts.forEach((part, i) => { if (!node[part]) node[part] = (i === parts.length - 1) ? null : {}; node = node[part]; });
+  }
+  return root;
+}
+const sortedNames = node => Object.keys(node).sort((a, b) => {
+  const da = node[a] !== null, db = node[b] !== null;
+  if (da !== db) return da ? -1 : 1;
+  return a.localeCompare(b);
+});
+
+function fileRow(path, label, depth, size) {
+  const checked = !state.excluded.has(path) ? 'checked' : '';
+  return `<label class="flex items-center gap-2.5 min-h-[44px] pr-2 rounded-lg active:bg-slate-800 cursor-pointer" style="padding-left:${8 + depth * 14}px">
+    <input type="checkbox" class="w-5 h-5 shrink-0" data-file="${esc(path)}" ${checked}>
+    <span class="flex-1 min-w-0 break-all text-slate-200">📄 ${esc(label)}</span>
+    <span class="text-[10px] text-slate-500 shrink-0">${fmtSize(size)}</span></label>`;
+}
+
+function treeHtml(node, prefix, depth) {
+  let html = '';
+  for (const name of sortedNames(node)) {
+    const path = prefix + name;
+    if (node[name] === null) {
+      const f = state.files.find(x => x.path === path);
+      html += fileRow(path, name, depth, f ? f.size : 0);
+    } else {
+      const kids = state.files.filter(x => x.path.startsWith(path + '/'));
+      const on = kids.filter(x => !state.excluded.has(x.path)).length;
+      const st = on === 0 ? 'none' : on === kids.length ? 'all' : 'some';
+      const open = !state.collapsed.has(path);
+      html += `<div class="flex items-center gap-2.5 min-h-[44px] pr-2 rounded-lg" style="padding-left:${8 + depth * 14}px">
+        <input type="checkbox" class="w-5 h-5 shrink-0" data-dir="${esc(path)}" data-st="${st}" ${st === 'all' ? 'checked' : ''}>
+        <button class="flex-1 min-w-0 h-11 text-left break-all text-sky-300 font-medium" data-collapse="${esc(path)}">${open ? '📂' : '📁'} ${esc(name)}/
+          <span class="text-[10px] text-slate-500 font-normal">${on}/${kids.length}</span></button></div>`;
+      if (open) html += treeHtml(node[name], path + '/', depth + 1);
+    }
+  }
+  return html;
+}
+
+function renderChecklist() {
+  const box = $('checklist'), top = box.scrollTop;
+  const q = $('search').value.trim().toLowerCase();
+  let html = '';
+  if (q) state.files.filter(f => f.path.toLowerCase().includes(q)).forEach(f => html += fileRow(f.path, f.path, 0, f.size));
+  else html = treeHtml(buildTree(state.files.map(f => f.path)), '', 0);
+  box.innerHTML = html || '<div class="p-4 text-slate-500 text-center">Koi file nahi mili</div>';
+  box.querySelectorAll('input[data-st="some"]').forEach(i => i.indeterminate = true);
+  box.scrollTop = top;
+}
+
+$('checklist').addEventListener('change', e => {
+  const t = e.target;
+  if (t.dataset.file !== undefined) {
+    t.checked ? state.excluded.delete(t.dataset.file) : state.excluded.add(t.dataset.file);
+  } else if (t.dataset.dir !== undefined) {
+    state.files.filter(f => f.path.startsWith(t.dataset.dir + '/')).forEach(f => t.checked ? state.excluded.delete(f.path) : state.excluded.add(f.path));
+  } else return;
+  renderChecklist(); generate();
+});
+$('checklist').addEventListener('click', e => {
+  const b = e.target.closest('[data-collapse]');
+  if (!b) return;
+  const p = b.dataset.collapse;
+  state.collapsed.has(p) ? state.collapsed.delete(p) : state.collapsed.add(p);
+  renderChecklist();
+});
+$('search').addEventListener('input', renderChecklist);
+$('selAll').onclick = () => { state.excluded.clear(); renderChecklist(); generate(); };
+$('selNone').onclick = () => { state.files.forEach(f => state.excluded.add(f.path)); renderChecklist(); generate(); };
+
+/* ---------- Output ---------- */
+function renderTree(node, prefix = '') {
+  let out = '';
+  const names = sortedNames(node);
+  names.forEach((name, i) => {
+    const last = i === names.length - 1, dir = node[name] !== null;
+    out += prefix + (last ? '└── ' : '├── ') + name + (dir ? '/' : '') + '\n';
+    if (dir) out += renderTree(node[name], prefix + (last ? '    ' : '│   '));
+  });
+  return out;
+}
+
+function generate() {
+  if (!state.loaded) return;
+  const sel = state.files.filter(f => !state.excluded.has(f.path));
+  const fence = $('optFence').checked, lineNo = $('optLineNo').checked;
+  const root = state.rootName || 'project';
+
+  let out = '# PROJECT: ' + root + '\n';
+  out += '# This single file is a flattened ZIP. Section 1 is the folder tree, section 2 has every file with its path and full code.\n';
+  out += '# Files included: ' + sel.length + '\n\n';
+  out += '## 1. FOLDER STRUCTURE\n';
+  out += root + '/\n' + renderTree(buildTree(sel.map(f => f.path))) + '\n';
+  out += '## 2. FILE CONTENTS\n';
+
+  for (const f of sel) {
+    let text = f.text;
+    if (lineNo) {
+      const lines = text.split('\n'), w = String(lines.length).length;
+      text = lines.map((l, i) => String(i + 1).padStart(w, ' ') + ' | ' + l).join('\n');
+    }
+    if (!text.endsWith('\n')) text += '\n';
+    if (fence) {
+      const runs = text.match(/`+/g) || [];
+      const n = Math.max(3, ...runs.map(r => r.length + 1));
+      const tk = '`'.repeat(n);
+      out += '\n### FILE: ' + f.path + '\n' + tk + (LANG[f.ext] !== undefined ? LANG[f.ext] : f.ext) + '\n' + text + tk + '\n';
+    } else {
+      out += '\n' + '='.repeat(60) + '\nFILE: ' + f.path + '\n' + '='.repeat(60) + '\n' + text;
+    }
+  }
+
+  $('output').value = out;
+  $('stFiles').textContent = sel.length;
+  $('stSkipped').textContent = state.skipped.length + (state.files.length - sel.length);
+  $('stChars').textContent = out.length.toLocaleString();
+  $('stTokens').textContent = Math.round(out.length / 4).toLocaleString();
+  $('tabCount').textContent = '(' + sel.length + ')';
+}
+
+/* ---------- Actions ---------- */
+async function copyOut() {
+  const text = $('output').value;
+  if (!text) return;
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {}
+  if (!ok) { const ta = $('output'); ta.removeAttribute('readonly'); ta.select(); ta.setSelectionRange(0, text.length); try { ok = document.execCommand('copy'); } catch (e) {} ta.setAttribute('readonly', ''); }
+  toast(ok ? '✅ Copied!' : 'Copy fail, textarea se manually select karo');
+  document.querySelectorAll('.copyTxt').forEach(s => { const o = s.textContent; s.textContent = ok ? 'Copied!' : o; setTimeout(() => s.textContent = o, 1500); });
+}
+
+function download(ext) {
+  const text = $('output').value; if (!text) return;
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (state.rootName || 'project') + '_flattened.' + ext;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast('⬇️ Download shuru');
+}
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const a = b.dataset.act;
+  if (a === 'copy') copyOut(); else download(a);
+});
+
+/* ---------- Tabs (mobile) ---------- */
+function setTab(t) {
+  const out = t === 'out';
+  $('panelOut').classList.toggle('panel-hidden', !out);
+  $('panelFiles').classList.toggle('panel-hidden', out);
+  $('tabOut').className = 'h-11 rounded-lg text-sm font-semibold ' + (out ? 'bg-indigo-600 text-white' : 'text-slate-300');
+  $('tabFiles').className = 'h-11 rounded-lg text-sm font-semibold ' + (!out ? 'bg-indigo-600 text-white' : 'text-slate-300');
+}
+$('tabOut').onclick = () => setTab('out');
+$('tabFiles').onclick = () => setTab('files');
+
+/* ---------- Skipped modal ---------- */
+function openSkipped() {
+  const list = $('skipList');
+  list.innerHTML = state.skipped.length
+    ? state.skipped.map(s => `<div class="break-all"><span class="text-slate-300">${esc(s.path)}</span><br><span class="text-rose-400/80">${esc(s.reason)}</span></div>`).join('')
+    : '<div class="text-slate-500">Kuch skip nahi hua.</div>';
+  $('skipModal').classList.remove('hidden'); $('skipModal').classList.add('flex');
+}
+function closeSkipped() { $('skipModal').classList.add('hidden'); $('skipModal').classList.remove('flex'); }
+$('viewSkipped').onclick = openSkipped;
+$('skipClose').onclick = closeSkipped;
+$('skipModal').addEventListener('click', e => { if (e.target === $('skipModal')) closeSkipped(); });
+
+/* ---------- Demo ---------- */
+async function loadDemo() {
+  showLoading(true, 'Demo project bana raha hoon...');
+  const z = new JSZip();
+  z.file('demo-app/package.json', '{\n  "name": "demo-app",\n  "version": "1.0.0",\n  "scripts": { "start": "node src/index.js" }\n}\n');
+  z.file('demo-app/README.md', '# Demo App\n\nSmall sample project.\n');
+  z.file('demo-app/src/index.js', "const { greet } = require('./utils/greet');\nconsole.log(greet('World'));\n");
+  z.file('demo-app/src/utils/greet.js', 'function greet(name) {\n  return `Hello, ${name}!`;\n}\nmodule.exports = { greet };\n');
+  z.file('demo-app/public/index.html', '<!DOCTYPE html>\n<html><body><h1>Demo</h1></body></html>\n');
+  z.file('demo-app/public/style.css', 'body { font-family: sans-serif; }\n');
+  z.file('demo-app/node_modules/left-pad/index.js', '// ignored\n');
+  z.file('demo-app/logo.png', new Uint8Array([137, 80, 78, 71, 0, 0, 0, 13]));
+  const data = await z.generateAsync({ type: 'uint8array' });
+  const zip = await JSZip.loadAsync(data);
+  await loadFromZip(zip, 'demo-app.zip');
+}
+
+icons();
+</script>
+</body>
+</html>
