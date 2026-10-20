@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ultra-HD Zip Tree Image Generator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background: radial-gradient(circle at top, #0f172a, #020617);
+      min-height: 100vh;
+      color: #f8fafc;
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+    .glass {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    /* Custom Scrollbar for long trees */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #090d16;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+  </style>
+</head>
+<body class="p-3 md:p-8 flex flex-col items-center">
+
+  <div class="glass w-full max-w-5xl rounded-2xl p-5 md:p-7 shadow-2xl">
+    <!-- Header -->
+    <div class="text-center mb-6">
+      <h1 class="text-2xl md:text-3xl font-extrabold bg-gradient-to-r from-cyan-400 via-sky-400 to-indigo-400 bg-clip-text text-transparent">
+        Ultra-HD Zip Folder Tree Generator
+      </h1>
+      <p class="text-slate-400 text-xs md:text-sm mt-1">
+        Upload any .zip file • Vector-Crisp SVG Rendering • Crystal Clear even on 10,000+ lines
+      </p>
+    </div>
+
+    <!-- Upload Area -->
+    <label for="zipInput" class="flex flex-col items-center justify-center w-full h-32 md:h-36 border-2 border-dashed border-cyan-500/40 rounded-xl cursor-pointer hover:border-cyan-400 hover:bg-slate-800/40 transition-all group">
+      <div class="flex flex-col items-center justify-center pt-4 pb-5">
+        <svg class="w-9 h-9 mb-2 text-cyan-400 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+        </svg>
+        <p class="text-sm text-slate-200"><span class="font-semibold text-cyan-400">Tap to Choose ZIP File</span></p>
+        <p id="fileNameDisplay" class="text-xs text-slate-400 mt-1">Supports massive folder structures without blur</p>
+      </div>
+      <input id="zipInput" type="file" accept=".zip,application/zip,application/x-zip-compressed" class="hidden" />
+    </label>
+
+    <!-- Status Loader -->
+    <div id="status" class="hidden text-center py-5 text-cyan-400 text-sm font-medium animate-pulse">
+      ⚡ Processing ZIP & rendering crystal-clear tree image...
+    </div>
+
+    <!-- Output Preview Section -->
+    <div id="outputSection" class="hidden mt-6 flex flex-col">
+      <!-- Toolbar -->
+      <div class="flex flex-wrap gap-3 justify-between items-center bg-slate-900/90 p-3 rounded-xl border border-slate-800 mb-4">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-mono text-cyan-300 bg-cyan-950/60 px-3 py-1.5 rounded-lg border border-cyan-800/50" id="statsBadge">
+            0 Folders • 0 Files
+          </span>
+          <span class="text-xs font-mono text-slate-400 hidden sm:inline" id="resBadge"></span>
+        </div>
+
+        <!-- Zoom & Download Controls -->
+        <div class="flex flex-wrap items-center gap-2">
+          <button id="fitToggleBtn" onclick="toggleZoomMode()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg border border-slate-700 transition">
+            🔍 Mode: Actual Size (100% Sharp)
+          </button>
+          <button id="downloadPngBtn" class="px-4 py-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white text-xs md:text-sm font-semibold rounded-lg shadow-lg transition flex items-center gap-1.5">
+            ⬇ Download HD PNG
+          </button>
+          <a id="downloadSvgBtn" download="folder-tree.svg" class="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-600 text-white text-xs md:text-sm font-semibold rounded-lg shadow transition flex items-center gap-1" title="Infinite Zoom Vector Image">
+            ⬇ SVG (Infinite Zoom)
+          </a>
+        </div>
+      </div>
+
+      <!-- Hint for long trees -->
+      <p class="text-xs text-slate-400 mb-2 flex items-center justify-between">
+        <span>💡 <b>Tip:</b> Scroll inside the box below to view long trees cleanly.</span>
+        <span id="scaleNotice" class="text-amber-400 font-mono"></span>
+      </p>
+
+      <!-- Scrollable Image Preview Box -->
+      <div id="previewContainer" class="w-full overflow-auto rounded-xl border border-slate-700/80 bg-[#0b1120] p-3 max-h-[75vh] shadow-inner">
+        <img id="previewImg" class="max-w-none h-auto rounded-lg shadow-md" alt="Folder Tree Image" />
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const zipInput = document.getElementById('zipInput');
+    const status = document.getElementById('status');
+    const outputSection = document.getElementById('outputSection');
+    const previewImg = document.getElementById('previewImg');
+    const downloadPngBtn = document.getElementById('downloadPngBtn');
+    const downloadSvgBtn = document.getElementById('downloadSvgBtn');
+    const fileNameDisplay = document.getElementById('fileNameDisplay');
+    const statsBadge = document.getElementById('statsBadge');
+    const resBadge = document.getElementById('resBadge');
+    const fitToggleBtn = document.getElementById('fitToggleBtn');
+    const scaleNotice = document.getElementById('scaleNotice');
+
+    let isActualSize = true;
+    let currentLines = [];
+    let currentZipName = 'archive';
+    let currentSvgWidth = 800;
+    let currentSvgHeight = 600;
+
+    function toggleZoomMode() {
+      isActualSize = !isActualSize;
+      if (isActualSize) {
+        previewImg.classList.remove('w-full');
+        previewImg.classList.add('max-w-none');
+        fitToggleBtn.textContent = '🔍 Mode: Actual Size (100% Sharp)';
+      } else {
+        previewImg.classList.remove('max-w-none');
+        previewImg.classList.add('w-full');
+        fitToggleBtn.textContent = '🔍 Mode: Fit to Screen';
+      }
+    }
+
+    function escapeXml(unsafe) {
+      return unsafe.replace(/[<>&'"]/g, c => {
+        switch (c) {
+          case '<': return '&lt;';
+          case '>': return '&gt;';
+          case '&': return '&amp;';
+          case '\'': return '&apos;';
+          case '"': return '&quot;';
+        }
+      });
+    }
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    zipInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      currentZipName = file.name.replace(/\.zip$/i, '');
+      fileNameDisplay.textContent = `${file.name} (${formatBytes(file.size)})`;
+      status.classList.remove('hidden');
+      outputSection.classList.add('hidden');
+
+      try {
+        const zip = await JSZip.loadAsync(file);
+        const root = { _files: [], _dirs: {} };
+        let fileCount = 0;
+        let dirCount = 0;
+
+        zip.forEach((relativePath, zipEntry) => {
+          const cleanPath = relativePath.replace(/\/$/, '');
+          if (!cleanPath) return;
+          const parts = cleanPath.split('/');
+          let current = root;
+
+          for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+            const isLast = (i === parts.length - 1);
+
+            if (isLast && !zipEntry.dir) {
+              const size = zipEntry._data && zipEntry._data.uncompressedSize ? formatBytes(zipEntry._data.uncompressedSize) : '';
+              current._files.push({ name: part, size });
+              fileCount++;
+            } else {
+              if (!current._dirs[part]) {
+                current._dirs[part] = { _files: [], _dirs: {} };
+                dirCount++;
+              }
+              current = current._dirs[part];
+            }
+          }
+        });
+
+        const lines = [{ text: `📦 ${file.name}`, type: 'root' }];
+
+        function traverse(node, prefix = '') {
+          const dirs = Object.keys(node._dirs).sort((a, b) => a.localeCompare(b));
+          const files = node._files.sort((a, b) => a.name.localeCompare(b.name));
+          const entries = [
+            ...dirs.map(d => ({ name: d, isDir: true, node: node._dirs[d] })),
+            ...files.map(f => ({ name: f.name, size: f.size, isDir: false }))
+          ];
+
+          entries.forEach((entry, index) => {
+            const isLast = index === entries.length - 1;
+            const connector = isLast ? '└── ' : '├── ';
+            const icon = entry.isDir ? '📁 ' : '📄 ';
+            lines.push({
+              prefix: prefix + connector,
+              name: icon + entry.name + (entry.isDir ? '/' : ''),
+              meta: (!entry.isDir && entry.size) ? `  (${entry.size})` : '',
+              type: entry.isDir ? 'dir' : 'file'
+            });
+
+            if (entry.isDir) {
+              const nextPrefix = prefix + (isLast ? '    ' : '│   ');
+              traverse(entry.node, nextPrefix);
+            }
+          });
+        }
+
+        traverse(root);
+        currentLines = lines;
+        statsBadge.textContent = `${dirCount} Folders • ${fileCount} Files (${lines.length} lines)`;
+
+        generateVectorAndPreview(lines, file.name);
+
+      } catch (err) {
+        alert('Error reading ZIP file: ' + err.message);
+        status.classList.add('hidden');
+      }
+    });
+
+    function generateVectorAndPreview(lines, zipName) {
+      const fontSize = 15;
+      const lineHeight = 26;
+      const paddingX = 32;
+      const paddingY = 36;
+      const headerHeight = 48;
+
+      // Measure width accurately using temporary 2d context
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.font = `600 ${fontSize}px "JetBrains Mono", "Courier New", monospace`;
+
+      let maxTextWidth = 420;
+      lines.forEach(line => {
+        const fullText = line.type === 'root' ? line.text : (line.prefix + line.name + (line.meta || ''));
+        const w = tempCtx.measureText(fullText).width;
+        if (w > maxTextWidth) maxTextWidth = w;
+      });
+
+      const width = Math.ceil(maxTextWidth + paddingX * 2 + 30);
+      const height = Math.ceil(lines.length * lineHeight + paddingY * 2 + headerHeight);
+      currentSvgWidth = width;
+      currentSvgHeight = height;
+
+      resBadge.textContent = `Base Size: ${width} × ${height} px`;
+
+      // Build crisp SVG (Vector image never blurs regardless of how long the tree is!)
+      let svgParts = [];
+      svgParts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`);
+      svgParts.push(`<style>
+        .tree-text { font-family: 'JetBrains Mono', 'Courier New', Courier, monospace; font-size: ${fontSize}px; white-space: pre; }
+        .root { fill: #38bdf8; font-weight: 700; font-size: ${fontSize + 1}px; }
+        .branch { fill: #64748b; }
+        .dir { fill: #fbbf24; font-weight: 600; }
+        .file { fill: #f1f5f9; }
+        .meta { fill: #64748b; font-size: ${fontSize - 2}px; }
+        .title { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; fill: #94a3b8; font-weight: 600; }
+      </style>`);
+
+      // Main Dark Background
+      svgParts.push(`<rect width="100%" height="100%" fill="#0b1120" rx="12"/>`);
+      // Top Window Bar
+      svgParts.push(`<rect width="100%" height="${headerHeight}" fill="#1e293b" rx="12"/>`);
+      svgParts.push(`<rect y="${headerHeight - 12}" width="100%" height="12" fill="#1e293b"/>`);
+
+      // Mac Window Dots
+      svgParts.push(`<circle cx="24" cy="${headerHeight/2}" r="6" fill="#ef4444"/>`);
+      svgParts.push(`<circle cx="44" cy="${headerHeight/2}" r="6" fill="#f59e0b"/>`);
+      svgParts.push(`<circle cx="64" cy="${headerHeight/2}" r="6" fill="#10b981"/>`);
+      svgParts.push(`<text x="92" y="${headerHeight/2 + 4}" class="title">${escapeXml(zipName)} — Folder Structure</text>`);
+
+      // Render Each Line
+      lines.forEach((line, index) => {
+        const y = headerHeight + paddingY + index * lineHeight;
+        if (line.type === 'root') {
+          svgParts.push(`<text x="${paddingX}" y="${y}" class="tree-text root" xml:space="preserve">${escapeXml(line.text)}</text>`);
+        } else {
+          const p = escapeXml(line.prefix);
+          const n = escapeXml(line.name);
+          const m = escapeXml(line.meta || '');
+          const cls = line.type === 'dir' ? 'dir' : 'file';
+          svgParts.push(`<text x="${paddingX}" y="${y}" class="tree-text" xml:space="preserve"><tspan class="branch">${p}</tspan><tspan class="${cls}">${n}</tspan><tspan class="meta">${m}</tspan></text>`);
+        }
+      });
+
+      svgParts.push(`</svg>`);
+      const svgString = svgParts.join('');
+      const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+      const svgUrl = URL.createObjectURL(svgBlob);
+
+      // Set Preview Image to Vector SVG (100% sharp on any length!)
+      previewImg.src = svgUrl;
+
+      // Setup SVG direct download
+      downloadSvgBtn.href = svgUrl;
+      downloadSvgBtn.download = `${currentZipName}_tree.svg`;
+
+      status.classList.add('hidden');
+      outputSection.classList.remove('hidden');
+    }
+
+    // High-Res PNG Export Handler (Auto-adjusts scale for huge trees so mobile browsers don't crash or blur)
+    downloadPngBtn.addEventListener('click', () => {
+      if (!currentLines.length) return;
+      const originalText = downloadPngBtn.innerHTML;
+      downloadPngBtn.innerHTML = '⏳ Generating HD PNG...';
+
+      setTimeout(() => {
+        try {
+          const fontSize = 15;
+          const lineHeight = 26;
+          const paddingX = 32;
+          const paddingY = 36;
+          const headerHeight = 48;
+
+          const width = currentSvgWidth;
+          const height = currentSvgHeight;
+
+          // Browser safe canvas limit check (Android Chrome max height ~ 16384px - 32767px)
+          const MAX_CANVAS_DIM = 16000;
+          const MAX_AREA = 24000000; // 24 Megapixels safe limit for mobile RAM
+
+          let scale = 2.5; // Default Ultra-HD 2.5x scale
+          if (height * scale > MAX_CANVAS_DIM) {
+            scale = MAX_CANVAS_DIM / height;
+          }
+          if ((width * scale) * (height * scale) > MAX_AREA) {
+            scale = Math.sqrt(MAX_AREA / (width * height));
+          }
+          scale = Math.max(0.75, Math.min(scale, 3));
+
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.floor(width * scale);
+          canvas.height = Math.floor(height * scale);
+          const ctx = canvas.getContext('2d');
+          ctx.scale(scale, scale);
+
+          // Background
+          ctx.fillStyle = '#0b1120';
+          ctx.fillRect(0, 0, width, height);
+
+          // Header Bar
+          ctx.fillStyle = '#1e293b';
+          ctx.fillRect(0, 0, width, headerHeight);
+
+          // Window Dots
+          ['#ef4444', '#f59e0b', '#10b981'].forEach((color, idx) => {
+            ctx.beginPath();
+            ctx.arc(24 + idx * 20, headerHeight / 2, 6, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+          });
+
+          ctx.font = `600 13px system-ui, sans-serif`;
+          ctx.fillStyle = '#94a3b8';
+          ctx.fillText(`${currentZipName}.zip — Folder Structure`, 92, headerHeight / 2 + 4);
+
+          ctx.textBaseline = 'alphabetic';
+
+          currentLines.forEach((line, index) => {
+            const y = headerHeight + paddingY + index * lineHeight;
+            if (line.type === 'root') {
+              ctx.font = `700 ${fontSize + 1}px "JetBrains Mono", "Courier New", monospace`;
+              ctx.fillStyle = '#38bdf8';
+              ctx.fillText(line.text, paddingX, y);
+            } else {
+              ctx.font = `400 ${fontSize}px "JetBrains Mono", "Courier New", monospace`;
+              ctx.fillStyle = '#64748b';
+              ctx.fillText(line.prefix, paddingX, y);
+              const prefixW = ctx.measureText(line.prefix).width;
+
+              ctx.font = line.type === 'dir'
+                ? `600 ${fontSize}px "JetBrains Mono", "Courier New", monospace`
+                : `400 ${fontSize}px "JetBrains Mono", "Courier New", monospace`;
+              ctx.fillStyle = line.type === 'dir' ? '#fbbf24' : '#f1f5f9';
+              ctx.fillText(line.name, paddingX + prefixW, y);
+
+              if (line.meta) {
+                const nameW = ctx.measureText(line.name).width;
+                ctx.font = `400 ${fontSize - 2}px "JetBrains Mono", "Courier New", monospace`;
+                ctx.fillStyle = '#64748b';
+                ctx.fillText(line.meta, paddingX + prefixW + nameW, y);
+              }
+            }
+          });
+
+          canvas.toBlob((blob) => {
+            if (!blob) {
+              alert('Tree is extremely long for PNG! Please click "Download SVG" for 100% clear infinite zoom image.');
+              downloadPngBtn.innerHTML = originalText;
+              return;
+            }
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${currentZipName}_tree_hd.png`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+            downloadPngBtn.innerHTML = originalText;
+          }, 'image/png');
+
+        } catch (err) {
+          alert('PNG Error: ' + err.message + '. Use SVG download instead.');
+          downloadPngBtn.innerHTML = originalText;
+        }
+      }, 50);
+    });
+  </script>
+</body>
+</html>
