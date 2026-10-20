@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pro Code Editor — Bulk Patch Tool v7</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ace.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ext-searchbox.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.2/ext-language_tools.js"></script>
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; height: 100dvh; background: #0d1117; color: white; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+        #editor { flex: 1; width: 100%; font-size: 14px; }
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: #0d1117; }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 5px; }
+        ::-webkit-scrollbar-thumb:hover { background: #58a6ff; }
+
+        .tbtn { min-height: 40px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer; user-select: none; }
+        .tbtn:active { transform: scale(.97); }
+        .tbtn-sm { min-height: 36px; padding: 0 12px; font-size: 12px; }
+        .tgl { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; min-width: 42px; padding: 0 10px; border-radius: 6px; border: 1px solid #30363d; background: #0d1117; color: #8b949e; font-size: 11px; font-weight: 700; cursor: pointer; user-select: none; }
+        .tgl.on { background: rgba(31,111,235,.18); color: #58a6ff; border-color: #1f6feb; }
+        .tgl.flexon { background: rgba(130,80,223,.22); color: #a371f7; border-color: #8250df; }
+        .find-panel textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.4; }
+        .match-badge { background: #1f3a66; color: #93c5fd; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+        .match-badge.zero { background: rgba(248,81,73,.18); color: #f85149; }
+        .match-badge.good { background: rgba(46,160,67,.18); color: #3fb950; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .hint { font-size: 10px; color: #6e7681; line-height: 1.4; }
+        .bulk-log { max-height: 40vh; overflow-y: auto; background: #000; border: 1px solid #30363d; border-radius: 8px; padding: 10px; font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .bulk-log .info    { color: #8b949e; }
+        .bulk-log .good    { color: #3fb950; }
+        .bulk-log .bad     { color: #f85149; }
+        .bulk-log .warn    { color: #e3b341; }
+        .bulk-log .sep     { color: #6e7681; border-top: 1px solid #21262d; margin-top: 8px; padding-top: 8px; }
+        .bulk-log .head    { color: #a371f7; font-weight: 700; }
+        .bulk-log .detail  { color: #58a6ff; padding-left: 12px; }
+        .bulk-log .summary { color: #f0f6fc; font-weight: 700; background: #161b22; padding: 6px 8px; border-radius: 4px; margin-top: 6px; }
+        .bulk-log .ambig   { color: #ff9b94; background: rgba(248,81,73,.1); padding: 4px 6px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <!-- HEADER -->
+    <div class="flex items-center justify-between px-3 py-2 bg-[#161b22] border-b border-[#30363d] shrink-0 gap-2">
+        <div class="font-bold text-sm text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 truncate">
+            Pro Code Editor · v7
+        </div>
+        <div class="flex gap-1.5 shrink-0 flex-wrap justify-end">
+            <button onclick="toggleGoto()" class="tbtn tbtn-sm bg-[#21262d] border border-[#30363d] text-[#c9d1d9]">#️⃣</button>
+            <button onclick="toggleFind()" class="tbtn tbtn-sm bg-[#1f6feb] text-white">🔍</button>
+            <button onclick="toggleBulk()" class="tbtn tbtn-sm bg-[#8250df] text-white">📦</button>
+            <button onclick="toggleSave()" class="tbtn tbtn-sm bg-[#238636] text-white">💾</button>
+            <button onclick="clearCode()" class="tbtn tbtn-sm bg-[#da3633] text-white">🗑</button>
+        </div>
+    </div>
+
+    <!-- GOTO LINE BAR -->
+    <div id="gotoBar" class="items-center gap-2 px-3 py-2 bg-[#161b22] border-b border-[#30363d] shrink-0" style="display:none">
+        <span class="text-[11px] font-bold text-gray-500 uppercase tracking-wider shrink-0">Line</span>
+        <input id="gotoInput" type="number" min="1" placeholder="1234" class="flex-1 min-w-0 bg-[#0d1117] border border-[#30363d] text-[#c9d1d9] px-3 py-2 rounded-md text-sm font-mono focus:border-[#58a6ff] outline-none">
+        <button onclick="doGoto()" class="tbtn tbtn-sm bg-[#238636] text-white shrink-0">Go</button>
+        <button onclick="doGoto(1)" class="tbtn tbtn-sm bg-[#21262d] border border-[#30363d] text-[#c9d1d9] shrink-0">Top</button>
+        <button onclick="doGoto(lastLine())" class="tbtn tbtn-sm bg-[#21262d] border border-[#30363d] text-[#c9d1d9] shrink-0">End</button>
+    </div>
+
+    <!-- SAVE PANEL -->
+    <div id="savePanel" class="flex-col p-3 bg-[#161b22] border-b border-[#30363d] gap-2 shadow-lg z-10 shrink-0" style="display:none">
+        <div class="flex items-center justify-between gap-2">
+            <span class="text-[11px] font-bold text-[#3fb950] uppercase tracking-wider">💾 Save / Download</span>
+            <button onclick="closeSavePanel()" class="text-[11px] font-bold text-gray-500 px-2">✕</button>
+        </div>
+        <div class="flex gap-2 items-stretch flex-wrap">
+            <input id="saveFilename" type="text" class="flex-1 min-w-0 bg-[#0d1117] border border-[#30363d] text-[#c9d1d9] p-2 rounded-md focus:border-[#3fb950] outline-none text-sm font-mono" placeholder="myfile" autocapitalize="off" autocorrect="off" spellcheck="false">
+            <select id="saveExt" class="bg-[#0d1117] border border-[#30363d] text-[#c9d1d9] p-2 rounded-md text-xs font-mono shrink-0 outline-none">
+                <option value=".html">.html</option>
+                <option value=".htm">.htm</option>
+                <option value=".txt">.txt</option>
+                <option value=".md">.md</option>
+                <option value=".js">.js</option>
+                <option value=".css">.css</option>
+                <option value=".json">.json</option>
+                <option value=".py">.py</option>
+                <option value=".xml">.xml</option>
+                <option value=".svg">.svg</option>
+                <option value=".yaml">.yaml</option>
+                <option value=".yml">.yml</option>
+                <option value=".sh">.sh</option>
+                <option value=".sql">.sql</option>
+                <option value="(custom)">(custom)</option>
+            </select>
+        </div>
+        <div class="flex gap-1.5 flex-wrap">
+            <button onclick="doDownload()" class="tbtn tbtn-sm bg-[#238636] text-white flex-1">⬇ Download</button>
+            <button onclick="doCopyNamed()" class="tbtn tbtn-sm bg-[#1f6feb] text-white">📋 Copy</button>
+            <button onclick="doShare()" class="tbtn tbtn-sm bg-[#8250df] text-white">📤 Share</button>
+        </div>
+        <div id="saveStatusBar" class="text-[11px] text-gray-500 font-mono"></div>
+        <p class="hint">💡 Filename bina extension likho, extension dropdown se choose karo. Ya dropdown mein <b>(custom)</b> chuno aur pura naam type karo.</p>
+    </div>
+
+    <!-- FIND & REPLACE PANEL -->
+    <div id="findPanel" class="find-panel flex-col p-3 bg-[#161b22] border-b border-[#30363d] gap-2 shadow-lg z-10 shrink-0" style="display:none">
+        <div class="relative">
+            <textarea id="findText" rows="2" class="w-full bg-[#0d1117] border border-[#30363d] text-[#c9d1d9] p-2 rounded-md focus:border-[#58a6ff] outline-none resize-y" placeholder="Find code (multi-line OK)"></textarea>
+            <span id="findCount" class="match-badge absolute top-1 right-1">0</span>
+        </div>
+        <textarea id="replaceText" rows="2" class="w-full bg-[#0d1117] border border-[#30363d] text-[#c9d1d9] p-2 rounded-md focus:border-[#58a6ff] outline-none resize-y" placeholder="Replace with (multi-line OK)"></textarea>
+
+        <div class="flex gap-1.5 flex-wrap items-center">
+            <button id="optFlex" onclick="toggleOpt('flex')" class="tgl" title="Ignore ALL whitespace">⇥ Smart</button>
+            <button id="optQuotes" onclick="toggleOpt('quotes')" class="tgl" title="Smart quotes/dashes">”</button>
+            <div class="h-4 w-px bg-[#30363d] mx-1"></div>
+            <button id="optCase" onclick="toggleOpt('case')" class="tgl" title="Case sensitive">Aa</button>
+            <button id="optRegex" onclick="toggleOpt('regex')" class="tgl" title="Regex mode">.*</button>
+            <button id="optIndent" onclick="toggleOpt('autoIndent')" class="tgl on" title="Auto-indent on replace">↹</button>
+            <button id="optWrap" onclick="toggleOpt('wrap')" class="tgl on" title="Wrap around">↻</button>
+            <span id="findStatus" class="text-[11px] text-gray-500 font-mono font-bold ml-auto"></span>
+        </div>
+
+        <div class="flex gap-1.5 flex-wrap">
+            <button onclick="findPrev()" class="tbtn tbtn-sm bg-[#21262d] border border-[#30363d] text-[#c9d1d9]">← Prev</button>
+            <button onclick="findNext()" class="tbtn tbtn-sm bg-[#21262d] border border-[#30363d] text-[#c9d1d9]">Next →</button>
+            <button onclick="doSearch()" class="tbtn tbtn-sm bg-[#238636] text-white flex-1">Find</button>
+            <button onclick="doReplace()" class="tbtn tbtn-sm bg-[#8250df] text-white">Replace</button>
+            <button onclick="doReplaceAll()" class="tbtn tbtn-sm bg-[#8250df] text-white">Replace All</button>
+            <button onclick="selectCurrentMatch()" class="tbtn tbtn-sm bg-[#0e639c] text-white">Select</button>
+        </div>
+
+        <div id="recentWrap" class="hidden">
+            <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Recent</div>
+            <div id="recentList" class="flex gap-1.5 overflow-x-auto scrollbar-hide"></div>
+        </div>
+    </div>
+
+    <!-- BULK PANEL -->
+    <div id="bulkPanel" class="find-panel flex-col p-3 bg-[#161b22] border-b border-[#30363d] gap-2 shadow-lg z-10 shrink-0" style="display:none">
+        <div class="flex items-center justify-between gap-2">
+            <span class="text-[11px] font-bold text-[#a371f7] uppercase tracking-wider">📦 Bulk Replace</span>
+            <div class="flex gap-2">
+                <button onclick="openFormatHelper()" class="text-[11px] font-bold text-emerald-400 underline">📖 Guide</button>
+                <button onclick="downloadTemplate()" class="text-[11px] font-bold text-blue-400 underline">⬇ Template</button>
+            </div>
+        </div>
+
+        <textarea id="bulkText" rows="6" class="w-full bg-[#0d1117] border border-[#30363d] text-[#c9d1d9] p-2 rounded-md focus:border-[#8250df] outline-none resize-y text-[11px]" placeholder="FIND 1 code&#10;∆=∆1&#10;REPLACE 1 code&#10;∆separation∆&#10;FIND 2 code&#10;∆=∆2&#10;REPLACE 2 code"></textarea>
+
+        <div class="flex gap-1.5 flex-wrap items-center">
+            <button onclick="uploadBulk()" class="tbtn tbtn-sm bg-[#0e639c] text-white">📁 Upload .txt</button>
+            <button onclick="runBulk()" class="tbtn tbtn-sm bg-[#8250df] text-white flex-1">▶ Run All</button>
+            <button onclick="clearBulk()" class="tbtn tbtn-sm bg-[#21262d] border border-[#30363d] text-[#c9d1d9]">Clear</button>
+        </div>
+
+        <div id="bulkStatus" class="text-[11px] text-gray-500 font-mono"></div>
+
+        <div id="bulkLogWrap" style="display:none">
+            <div class="flex items-center justify-between px-2 py-1.5 bg-[#0d1117] border border-[#30363d] rounded-t-md border-b-0">
+                <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">📋 Detailed Log</span>
+                <div class="flex gap-1.5">
+                    <button onclick="copyBulkLog()" class="text-[10px] font-bold text-blue-400 px-2 py-1 rounded border border-[#30363d] bg-[#161b22]">📋 Copy Log</button>
+                    <button onclick="clearBulkLog()" class="text-[10px] font-bold text-red-400 px-2 py-1 rounded border border-[#30363d] bg-[#161b22]">🗑 Clear</button>
+                </div>
+            </div>
+            <div id="bulkLog" class="bulk-log" style="border-top-left-radius:0;border-top-right-radius:0;"></div>
+        </div>
+
+        <p class="hint">💡 <b style="color:#a371f7">∆=∆N</b> = FIND aur REPLACE ko alag karta hai. <b style="color:#a371f7">∆separation∆</b> = ek pair ko next pair se alag karta hai.</p>
+    </div>
+
+    <!-- STATUS BAR -->
+    <div class="flex items-center justify-between px-3 py-1.5 bg-[#0d1117] border-b border-[#30363d] text-[11px] text-gray-500 font-mono gap-2 shrink-0">
+        <span id="cursorPos" class="text-[#58a6ff] font-bold shrink-0">Ln 1, Col 1</span>
+        <span id="selInfo" class="text-[#e3b341] truncate flex-1"></span>
+        <span id="lineCount" class="shrink-0">0 lines</span>
+        <span id="saveStatus" class="shrink-0">saved</span>
+    </div>
+
+    <!-- ACE EDITOR -->
+    <div id="editor"></div>
+
+    <!-- FORMAT HELPER MODAL -->
+    <div id="fmtModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;align-items:center;justify-content:center;padding:20px;">
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;width:100%;max-width:560px;max-height:90vh;display:flex;flex-direction:column;">
+            <div style="padding:12px 16px;border-bottom:1px solid #30363d;display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-weight:700;color:#a371f7;">📖 Format Guide</span>
+                <button onclick="closeFormatHelper()" style="color:#8b949e;font-size:22px;line-height:1;">×</button>
+            </div>
+            <div style="padding:16px;overflow-y:auto;flex:1;">
+                <pre id="fmtContent" style="font-family:ui-monospace,Menlo,monospace;font-size:11px;line-height:1.6;color:#c9d1d9;white-space:pre-wrap;word-break:break-word;margin:0;background:#0d1117;padding:12px;border-radius:8px;border:1px solid #30363d;"></pre>
+            </div>
+            <div style="padding:12px 16px;border-top:1px solid #30363d;display:flex;gap:8px;flex-wrap:wrap;">
+                <button onclick="downloadFormatGuide()" class="tbtn tbtn-sm bg-[#0e639c] text-white flex-1">⬇ Download Guide .txt</button>
+                <button onclick="copyFormatGuide()" class="tbtn tbtn-sm bg-[#238636] text-white flex-1">📋 Copy Guide</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============ Ace setup ============
+        var editor = ace.edit("editor");
+        editor.setTheme("ace/theme/one_dark");
+        editor.session.setMode("ace/mode/html");
+        editor.setOptions({
+            wrap: false,
+            showLineNumbers: true,
+            showPrintMargin: false,
+            fontSize: "14px",
+            useSoftTabs: true,
+            tabSize: 4,
+            enableBasicAutocompletion: true,
+            enableLiveAutocompletion: true,
+            selectionStyle: "line",
+            highlightActiveLine: true,
+            highlightSelectedWord: true,
+            scrollPastEnd: 0.5
+        });
+
+        // ============ Constants ============
+        const CACHE_KEY = 'utkarsh_editor_cache';
+        const OPTS_KEY = 'utkarsh_editor_opts';
+        const RECENT_KEY = 'utkarsh_editor_recent';
+        const BULK_KEY = 'utkarsh_editor_bulk';
+        const SAVE_NAME_KEY = 'utkarsh_save_filename';
+        const SAVE_EXT_KEY = 'utkarsh_save_extension';
+        const $ = id => document.getElementById(id);
+
+        const savedCode = localStorage.getItem(CACHE_KEY);
+        if (savedCode) editor.setValue(savedCode, -1);
+
+        // ============ Auto-save ============
+        let typingTimer;
+        editor.session.on('change', function () {
+            $('saveStatus').innerText = "saving…";
+            $('saveStatus').style.color = "#e3b341";
+            clearTimeout(typingTimer);
+            typingTimer = setTimeout(() => {
+                localStorage.setItem(CACHE_KEY, editor.getValue());
+                $('saveStatus').innerText = "saved";
+                $('saveStatus').style.color = "#3fb950";
+            }, 600);
+            updateLineCount();
+            if ($('findPanel').style.display === 'flex') liveCount();
+        });
+
+        function updateLineCount() {
+            const n = editor.session.getLength();
+            $('lineCount').innerText = n + (n === 1 ? " line" : " lines");
+        }
+        const lastLine = () => editor.session.getLength();
+
+        // ============ Live cursor ============
+        function updateCursorPos() {
+            const p = editor.getCursorPosition();
+            $('cursorPos').innerText = `Ln ${p.row + 1}, Col ${p.column + 1}`;
+        }
+        editor.selection.on('changeCursor', updateCursorPos);
+        editor.selection.on('changeSelection', () => {
+            const range = editor.getSelectionRange();
+            const txt = editor.session.getTextRange(range);
+            if (!txt) { $('selInfo').innerText = ''; return; }
+            const lines = txt.split('\n').length;
+            $('selInfo').innerText = `${txt.length} chars · ${lines} line${lines === 1 ? '' : 's'}`;
+        });
+        updateCursorPos();
+        updateLineCount();
+
+        // ============ Options ============
+        const opts = Object.assign(
+            { case: false, word: false, regex: false, wrap: true, flex: true, quotes: false, autoIndent: true },
+            JSON.parse(localStorage.getItem(OPTS_KEY) || '{}')
+        );
+        function toggleOpt(k) {
+            if (k === 'flex' && !opts.flex) opts.regex = false;
+            if (k === 'regex' && !opts.regex) opts.flex = false;
+            opts[k] = !opts[k];
+            localStorage.setItem(OPTS_KEY, JSON.stringify(opts));
+            paintOpts();
+            if ($('findPanel').style.display === 'flex') liveCount();
+        }
+        function paintOpts() {
+            const f = $('optFlex');
+            f.classList.toggle('on', opts.flex);
+            f.classList.toggle('flexon', opts.flex);
+            $('optQuotes').classList.toggle('on', opts.quotes);
+            $('optCase').classList.toggle('on', opts.case);
+            $('optRegex').classList.toggle('on', opts.regex);
+            $('optIndent').classList.toggle('on', opts.autoIndent);
+            $('optWrap').classList.toggle('on', opts.wrap);
+        }
+        paintOpts();
+
+        // ============ Panel toggles ============
+        function hideAllPanels() {
+            ['savePanel', 'findPanel', 'bulkPanel'].forEach(id => {
+                const p = $(id);
+                if (p) p.style.display = 'none';
+            });
+        }
+        function toggleFind() {
+            const p = $('findPanel');
+            const showing = p.style.display === 'flex';
+            hideAllPanels();
+            if (!showing) { p.style.display = 'flex'; $('findText').focus(); liveCount(); renderRecent(); }
+        }
+        function toggleBulk() {
+            const p = $('bulkPanel');
+            const showing = p.style.display === 'flex';
+            hideAllPanels();
+            if (!showing) { p.style.display = 'flex'; $('bulkText').focus(); }
+        }
+        function toggleSave() {
+            const p = $('savePanel');
+            const showing = p.style.display === 'flex';
+            hideAllPanels();
+            if (!showing) {
+                p.style.display = 'flex';
+                const savedName = localStorage.getItem(SAVE_NAME_KEY) || 'code';
+                const savedExt = localStorage.getItem(SAVE_EXT_KEY) || '.html';
+                $('saveFilename').value = savedName;
+                $('saveExt').value = savedExt;
+                $('saveFilename').focus();
+                setSaveStatus('');
+            }
+        }
+        function closeSavePanel() { $('savePanel').style.display = 'none'; }
+        function toggleGoto() {
+            const b = $('gotoBar');
+            const showing = b.style.display === 'flex';
+            b.style.display = showing ? 'none' : 'flex';
+            if (!showing) $('gotoInput').focus();
+        }
+
+        // ============ Status helpers ============
+        function setStatus(msg, color) {
+            const s = $('findStatus');
+            s.innerText = msg || '';
+            s.style.color = color || '#8b949e';
+        }
+        function setCount(n) {
+            const b = $('findCount');
+            b.textContent = String(n);
+            b.classList.remove('zero', 'good');
+            if (n === 0) b.classList.add('zero'); else b.classList.add('good');
+        }
+        function clearBars() {
+            $('findText').value = '';
+            $('replaceText').value = '';
+            setCount(0);
+            setStatus('');
+        }
+        function setBulkStatus(msg, kind) {
+            const s = $('bulkStatus');
+            s.innerText = msg || '';
+            s.style.color = kind === 'good' ? '#3fb950' : kind === 'bad' ? '#f85149' : kind === 'warn' ? '#e3b341' : '#8b949e';
+        }
+        function addBulkLog(msg, kind) {
+            const log = $('bulkLog');
+            $('bulkLogWrap').style.display = 'block';
+            const d = document.createElement('div');
+            d.className = kind || 'info';
+            d.textContent = msg;
+            log.appendChild(d);
+            log.scrollTop = log.scrollHeight;
+        }
+        function clearBulkLog() {
+            $('bulkLog').innerHTML = '';
+            $('bulkLogWrap').style.display = 'none';
+        }
+        function copyBulkLog() {
+            const text = $('bulkLog').innerText;
+            if (!text) return alert('Log is empty');
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.querySelector('button[onclick="copyBulkLog()"]');
+                const orig = btn.innerHTML;
+                btn.innerHTML = '✓ Copied';
+                btn.classList.add('bg-[#238636]');
+                setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('bg-[#238636]'); }, 1500);
+            });
+        }
+
+        // ============ SAVE / DOWNLOAD ============
+        function buildFullFilename() {
+            let name = ($('saveFilename').value || 'code').trim();
+            const extChoice = $('saveExt').value;
+            if (!name) name = 'code';
+            const hasExt = /\.[a-z0-9]{1,8}$/i.test(name);
+            let ext = extChoice === '(custom)' ? '' : extChoice;
+            localStorage.setItem(SAVE_NAME_KEY, name);
+            localStorage.setItem(SAVE_EXT_KEY, extChoice);
+            if (hasExt) return name;
+            return name + ext;
+        }
+        function setSaveStatus(msg, kind) {
+            const s = $('saveStatusBar');
+            if (!s) return;
+            s.innerText = msg || '';
+            s.style.color = kind === 'good' ? '#3fb950' : kind === 'bad' ? '#f85149' : kind === 'warn' ? '#e3b341' : '#8b949e';
+        }
+        function doDownload() {
+            const content = editor.getValue();
+            if (!content) return setSaveStatus('Editor is empty!', 'bad');
+            const filename = buildFullFilename();
+            if (!filename) return setSaveStatus('Please enter a filename!', 'bad');
+            try {
+                const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(url), 2000);
+                setSaveStatus(`✓ Downloaded: ${filename} (${(content.length / 1024).toFixed(1)} KB)`, 'good');
+            } catch (e) {
+                setSaveStatus('Download failed: ' + e.message, 'bad');
+            }
+        }
+        function doCopyNamed() {
+            const content = editor.getValue();
+            if (!content) return setSaveStatus('Editor is empty!', 'bad');
+            const filename = buildFullFilename();
+            navigator.clipboard.writeText(content).then(() => {
+                setSaveStatus(`✓ Copied (${filename} · ${(content.length / 1024).toFixed(1)} KB)`, 'good');
+            }).catch(() => setSaveStatus('Copy failed — try Download instead', 'bad'));
+        }
+        async function doShare() {
+            const content = editor.getValue();
+            if (!content) return setSaveStatus('Editor is empty!', 'bad');
+            const filename = buildFullFilename();
+            if (!navigator.share) {
+                setSaveStatus('Share not supported — downloading instead', 'warn');
+                doDownload();
+                return;
+            }
+            try {
+                const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+                const file = new File([blob], filename, { type: 'text/plain;charset=utf-8' });
+                await navigator.share({ files: [file], title: filename, text: 'Shared from Pro Code Editor' });
+                setSaveStatus(`✓ Shared: ${filename}`, 'good');
+            } catch (e) {
+                if (e.name !== 'AbortError') setSaveStatus('Share failed: ' + e.message, 'bad');
+            }
+        }
+        // Wire filename input persistence
+        document.addEventListener('DOMContentLoaded', () => {
+            const fn = $('saveFilename'), fe = $('saveExt');
+            if (fn) fn.addEventListener('input', () => {
+                localStorage.setItem(SAVE_NAME_KEY, fn.value);
+                setSaveStatus('');
+            });
+            if (fe) fe.addEventListener('change', () => {
+                localStorage.setItem(SAVE_EXT_KEY, fe.value);
+                setSaveStatus('');
+            });
+        });
+
+        // ============================================
+        // SMART MATCH ENGINE
+        // ============================================
+        function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+        function normalizeSmartChars(s) {
+            return s
+                .replace(/[\u2018\u2019\u201A\u201B\u2032]/g, "'")
+                .replace(/[\u201C\u201D\u201E\u201F\u2033]/g, '"')
+                .replace(/[\u2013\u2014\u2212]/g, '-')
+                .replace(/\u00A0|\u2007|\u202F/g, ' ')
+                .replace(/\u200B|\uFEFF|\u2060/g, '');
+        }
+        function collapseWSWithMap(text) {
+            const norm = [];
+            const map = [];
+            let prevWS = true;
+            for (let i = 0; i < text.length; i++) {
+                const c = text.charCodeAt(i);
+                const isWS = c === 32 || c === 9 || c === 10 || c === 13 || c === 11 || c === 12;
+                if (isWS) {
+                    if (!prevWS) { norm.push(' '); map.push(i); prevWS = true; }
+                } else {
+                    norm.push(text[i]); map.push(i); prevWS = false;
+                }
+            }
+            while (norm.length && norm[norm.length - 1] === ' ') { norm.pop(); map.pop(); }
+            return { norm: norm.join(''), map };
+        }
+        function buildMatcher(rawNeedle) {
+            if (!rawNeedle) return null;
+            if (opts.regex) {
+                try { return { kind: 'regex', re: new RegExp(rawNeedle, opts.case ? 'gm' : 'gim') }; }
+                catch (e) { return { error: e.message }; }
+            }
+            if (opts.flex) {
+                let needle = rawNeedle;
+                if (opts.quotes) needle = normalizeSmartChars(needle);
+                needle = needle.replace(/^\s+|\s+$/g, '');
+                if (!needle) return null;
+                const { norm } = collapseWSWithMap(needle);
+                if (!norm) return null;
+                return { kind: 'flex', needleNorm: norm, caseSensitive: opts.case, quotes: opts.quotes };
+            }
+            const esc = escapeRegex(rawNeedle).replace(/\\n/g, '\\r?\\n');
+            try { return { kind: 'regex', re: new RegExp(esc, opts.case ? 'gm' : 'gim') }; }
+            catch (e) { return { error: e.message }; }
+        }
+        function runMatcher(matcher) {
+            if (!matcher) return [];
+            const docRaw = editor.session.getValue();
+            if (matcher.kind === 'regex') {
+                const matches = [];
+                let m;
+                matcher.re.lastIndex = 0;
+                while ((m = matcher.re.exec(docRaw)) !== null) {
+                    if (m[0].length === 0) { matcher.re.lastIndex++; continue; }
+                    matches.push({ index: m.index, length: m[0].length });
+                    if (matches.length > 5000) break;
+                }
+                return matches;
+            }
+            if (matcher.kind === 'flex') {
+                const docSrc = matcher.quotes ? normalizeSmartChars(docRaw) : docRaw;
+                const { norm, map } = collapseWSWithMap(docSrc);
+                const pat = escapeRegex(matcher.needleNorm);
+                const re = new RegExp(pat, matcher.caseSensitive ? 'g' : 'gi');
+                const matches = [];
+                let m;
+                re.lastIndex = 0;
+                while ((m = re.exec(norm)) !== null) {
+                    if (m[0].length === 0) { re.lastIndex++; continue; }
+                    const startOrig = map[m.index];
+                    const endOrig = map[m.index + m[0].length - 1] + 1;
+                    matches.push({ index: startOrig, length: endOrig - startOrig });
+                    if (matches.length > 5000) break;
+                }
+                return matches;
+            }
+            return [];
+        }
+
+        // ============ Offset helpers ============
+        function offsetToPos(doc, offset) {
+            let row = 0, col = 0;
+            for (let i = 0; i < offset; i++) {
+                if (doc.charCodeAt(i) === 10) { row++; col = 0; } else col++;
+            }
+            return { row, column: col };
+        }
+        function posToOffset(doc, pos) {
+            let off = 0, line = 0;
+            for (let i = 0; i < doc.length; i++) {
+                if (line === pos.row) break;
+                if (doc.charCodeAt(i) === 10) line++;
+                off++;
+            }
+            return off + pos.column;
+        }
+        function selectMatch(doc, match) {
+            const Range = ace.require('ace/range').Range;
+            const start = offsetToPos(doc, match.index);
+            const end = offsetToPos(doc, match.index + match.length);
+            editor.selection.setSelectionRange(new Range(start.row, start.column, end.row, end.column));
+            editor.renderer.scrollCursorIntoView(start);
+            editor.focus();
+        }
+
+        // ============ Auto-indent ============
+        function getLineIndentAtOffset(doc, offset) {
+            let lineStart = offset;
+            while (lineStart > 0 && doc.charCodeAt(lineStart - 1) !== 10) lineStart--;
+            let indentEnd = lineStart;
+            while (indentEnd < doc.length) {
+                const c = doc.charCodeAt(indentEnd);
+                if (c === 32 || c === 9) indentEnd++;
+                else break;
+            }
+            return doc.slice(lineStart, indentEnd);
+        }
+        function indentReplaceText(rep, indent) {
+            if (!indent) return rep;
+            const lines = rep.split('\n');
+            return lines.map((l, i) => i === 0 ? l : (l.length ? indent + l : l)).join('\n');
+        }
+
+        // ============ Single Find/Replace ============
+        let liveTimer;
+        function liveCount() {
+            clearTimeout(liveTimer);
+            liveTimer = setTimeout(() => {
+                const text = $('findText').value;
+                if (!text) { setCount(0); setStatus(''); return; }
+                const matcher = buildMatcher(text);
+                if (!matcher) { setCount(0); setStatus(''); return; }
+                if (matcher.error) { setCount(0); setStatus('bad pattern', '#ff7b72'); return; }
+                const matches = runMatcher(matcher);
+                const n = matches.length;
+                setCount(n);
+                const label = opts.flex ? `${n} smart` : `${n} match${n === 1 ? '' : 'es'}`;
+                setStatus(n > 0 ? label : 'no matches', n > 0 ? '#3fb950' : '#f85149');
+            }, 200);
+        }
+        $('findText').addEventListener('input', liveCount);
+
+        let lastMatchIndex = -1;
+        function doSearch() {
+            const text = $('findText').value;
+            if (!text) return setStatus("paste code to find!", "#ff7b72");
+            const matcher = buildMatcher(text);
+            if (!matcher) return;
+            if (matcher.error) return setStatus('pattern error: ' + matcher.error, '#ff7b72');
+            const matches = runMatcher(matcher);
+            if (!matches.length) {
+                lastMatchIndex = -1;
+                setCount(0);
+                setStatus('not found', '#ff7b72');
+                return;
+            }
+            lastMatchIndex = 0;
+            setCount(matches.length);
+            setStatus(`found ${matches.length} match${matches.length === 1 ? '' : 'es'}`, '#3fb950');
+            selectMatch(editor.session.getValue(), matches[0]);
+            pushRecent(text);
+        }
+        function findNext() {
+            const matcher = buildMatcher($('findText').value);
+            if (!matcher || matcher.error) return doSearch();
+            const matches = runMatcher(matcher);
+            if (!matches.length) return doSearch();
+            lastMatchIndex = (lastMatchIndex + 1) % matches.length;
+            setStatus(`match ${lastMatchIndex + 1}/${matches.length}`, '#3fb950');
+            selectMatch(editor.session.getValue(), matches[lastMatchIndex]);
+        }
+        function findPrev() {
+            const matcher = buildMatcher($('findText').value);
+            if (!matcher || matcher.error) return doSearch();
+            const matches = runMatcher(matcher);
+            if (!matches.length) return doSearch();
+            lastMatchIndex = (lastMatchIndex - 1 + matches.length) % matches.length;
+            setStatus(`match ${lastMatchIndex + 1}/${matches.length}`, '#3fb950');
+            selectMatch(editor.session.getValue(), matches[lastMatchIndex]);
+        }
+        function doReplace() {
+            const text = $('findText').value;
+            if (!text) return setStatus("paste code to find!", "#ff7b72");
+            const rep = $('replaceText').value;
+            const matcher = buildMatcher(text);
+            if (!matcher || matcher.error) return;
+            const doc = editor.session.getValue();
+            const matches = runMatcher(matcher);
+            if (!matches.length) return setStatus('not found', '#ff7b72');
+            const curOff = posToOffset(doc, editor.getCursorPosition());
+            let target = matches.findIndex(m => m.index >= curOff);
+            if (target === -1) target = 0;
+            const m = matches[target];
+            let finalRep = rep;
+            if (opts.autoIndent) finalRep = indentReplaceText(rep, getLineIndentAtOffset(doc, m.index));
+            const newDoc = doc.slice(0, m.index) + finalRep + doc.slice(m.index + m.length);
+            editor.setValue(newDoc, -1);
+            const newStart = offsetToPos(newDoc, m.index);
+            const newEnd = offsetToPos(newDoc, m.index + finalRep.length);
+            const Range = ace.require('ace/range').Range;
+            editor.selection.setSelectionRange(new Range(newStart.row, newStart.column, newEnd.row, newEnd.column));
+            editor.renderer.scrollCursorIntoView(newStart);
+            lastMatchIndex = -1;
+            pushRecent(text);
+            clearBars();
+            setStatus('replaced 1 ✓', '#3fb950');
+        }
+        function doReplaceAll() {
+            const text = $('findText').value;
+            if (!text) return setStatus("paste code to find!", "#ff7b72");
+            const rep = $('replaceText').value;
+            const matcher = buildMatcher(text);
+            if (!matcher || matcher.error) return;
+            const doc = editor.session.getValue();
+            const matches = runMatcher(matcher);
+            if (!matches.length) return setStatus('nothing replaced', '#ff7b72');
+            let out = '';
+            let last = 0;
+            for (const m of matches) {
+                out += doc.slice(last, m.index);
+                if (opts.autoIndent) out += indentReplaceText(rep, getLineIndentAtOffset(doc, m.index));
+                else out += rep;
+                last = m.index + m.length;
+            }
+            out += doc.slice(last);
+            const count = matches.length;
+            editor.setValue(out, -1);
+            lastMatchIndex = -1;
+            pushRecent(text);
+            clearBars();
+            setStatus(`replaced ${count} ✓`, '#3fb950');
+        }
+        function selectCurrentMatch() {
+            const text = $('findText').value;
+            const matcher = buildMatcher(text);
+            if (!matcher || matcher.error) return;
+            const doc = editor.session.getValue();
+            const matches = runMatcher(matcher);
+            if (!matches.length) return setStatus('not found', '#ff7b72');
+            const curOff = posToOffset(doc, editor.getCursorPosition());
+            let target = matches.findIndex(m => m.index >= curOff);
+            if (target === -1) target = 0;
+            lastMatchIndex = target;
+            selectMatch(doc, matches[target]);
+            const p = editor.getCursorPosition();
+            setStatus(`selected Ln ${p.row + 1}`, '#58a6ff');
+        }
+
+        // ============================================
+        // BULK REPLACE — v6 (∆=∆N + ∆separation∆)
+        // ============================================
+        const PAIR_SEP_RE = /\n?\s*∆separation∆\s*\n?/g;
+        const IN_PAIR_SEP_RE = /∆=∆\d*/;
+
+        function parseBulk(text) {
+            text = text.replace(/\r\n/g, '\n').trim();
+            if (!text) return [];
+            const chunks = text.split(PAIR_SEP_RE).map(c => c.trim()).filter(Boolean);
+            const pairs = [];
+            for (const chunk of chunks) {
+                const m = chunk.match(IN_PAIR_SEP_RE);
+                if (!m) continue;
+                const sepIndex = chunk.indexOf(m[0]);
+                const find = chunk.slice(0, sepIndex).trim();
+                const replace = chunk.slice(sepIndex + m[0].length).trim();
+                if (!find) continue;
+                const numMatch = m[0].match(/∆=∆(\d+)/);
+                const explicitNum = numMatch ? parseInt(numMatch[1], 10) : null;
+                pairs.push({ find, replace, explicitNum });
+            }
+            return pairs;
+        }
+
+        function runBulk() {
+            const text = $('bulkText').value;
+            if (!text.trim()) return setBulkStatus('Paste or upload a .txt file', 'bad');
+            let pairs;
+            try { pairs = parseBulk(text); }
+            catch (e) { return setBulkStatus('Parse error: ' + e.message, 'bad'); }
+            if (!pairs.length) return setBulkStatus('No pairs found. Format: FIND ∆=∆1 REPLACE ∆separation∆ FIND2 ∆=∆2 REPLACE2', 'bad');
+
+            const total = pairs.length;
+            const preview = pairs.slice(0, 5).map((p, i) => `  ${i + 1}. "${p.find.split('\n')[0].slice(0, 40)}..."`).join('\n');
+            const more = total > 5 ? `\n  ...and ${total - 5} more` : '';
+            if (!confirm(`Apply ${total} bulk replacement${total === 1 ? '' : 's'}?\n\n${preview}${more}\n\nEditor content will change. Undo is per-pair, so save a backup first.`)) return;
+
+            clearBulkLog();
+            $('bulkLogWrap').style.display = 'block';
+
+            addBulkLog(`════ BULK REPLACE ════`, 'head');
+            addBulkLog(`Total pairs: ${total}`, 'info');
+            addBulkLog(`Options: Smart=${opts.flex ? 'ON' : 'off'} · CaseSensitive=${opts.case ? 'ON' : 'off'} · AutoIndent=${opts.autoIndent ? 'ON' : 'off'} · Quotes=${opts.quotes ? 'ON' : 'off'}`, 'info');
+
+            const originalDoc = editor.session.getValue();
+
+            let success = 0, skipped = 0, totalReplaced = 0, ambiguous = 0;
+            const startTime = Date.now();
+            const skippedList = [];
+            const successList = [];
+            const ambiguousList = [];
+
+            for (let i = 0; i < pairs.length; i++) {
+                const { find, replace, explicitNum } = pairs[i];
+                const firstLine = find.split('\n')[0].slice(0, 60) || '(empty)';
+                const label = explicitNum ? `[#${explicitNum}]` : `[${i + 1}/${total}]`;
+                addBulkLog(``, 'sep');
+                addBulkLog(`${label} 🔍 ${firstLine}${find.includes('\n') ? ' …+' + (find.split('\n').length - 1) + ' more lines' : ''}`, 'head');
+
+                if (i + 1 < pairs.length && replace) {
+                    const nextFind = pairs[i + 1].find;
+                    if (nextFind) {
+                        const rFL = replace.split('\n')[0].trim();
+                        const nFL = nextFind.split('\n')[0].trim();
+                        if (rFL && nFL && rFL === nFL) {
+                            addBulkLog(`  🔀 AMBIGUITY: is pair ka REPLACE next pair ke FIND se match karta hai!`, 'ambig');
+                            addBulkLog(`      → Next pair (#${i + 2}) ka find: "${nFL.slice(0, 50)}"`, 'detail');
+                            addBulkLog(`      → Is pair ka replace bhi waisa hi hai. Next pair isko bhi match kar sakta hai.`, 'detail');
+                            ambiguous++;
+                            ambiguousList.push({ i: i + 1, nextI: i + 2, firstLine, nextFirstLine: nFL });
+                        }
+                    }
+                }
+
+                const matcher = buildMatcher(find);
+                if (!matcher) {
+                    addBulkLog(`  ⚠ SKIPPED — empty find pattern`, 'warn');
+                    skipped++;
+                    skippedList.push({ i: i + 1, reason: 'empty pattern', firstLine });
+                    continue;
+                }
+                if (matcher.error) {
+                    addBulkLog(`  ✗ SKIPPED — bad pattern: ${matcher.error}`, 'bad');
+                    skipped++;
+                    skippedList.push({ i: i + 1, reason: 'bad pattern: ' + matcher.error, firstLine });
+                    continue;
+                }
+
+                const doc = editor.session.getValue();
+                const matches = runMatcher(matcher);
+                if (!matches.length) {
+                    let wasInOriginal = false;
+                    try {
+                        const savedDoc = editor.session.getValue();
+                        editor.session.setValue(originalDoc, -1);
+                        wasInOriginal = runMatcher(buildMatcher(find)).length > 0;
+                        editor.session.setValue(savedDoc, -1);
+                    } catch (e) {}
+                    if (wasInOriginal) {
+                        addBulkLog(`  ⚠ NO MATCH — original mein tha, but previous replacement ne modify kar diya!`, 'warn');
+                        addBulkLog(`      → Ye pair pehle chalna chahiye tha`, 'detail');
+                        skippedList.push({ i: i + 1, reason: 'CONFLICT: modified by earlier pair', firstLine });
+                    } else {
+                        addBulkLog(`  ⚠ NO MATCH — 0 occurrences found, skipped`, 'warn');
+                        skippedList.push({ i: i + 1, reason: 'no match', firstLine });
+                    }
+                    skipped++;
+                    continue;
+                }
+
+                addBulkLog(`  ✓ Matched ${matches.length} occurrence${matches.length === 1 ? '' : 's'}`, 'good');
+
+                let out = '';
+                let last = 0;
+                let replacedLines = 0;
+                for (const m of matches) {
+                    out += doc.slice(last, m.index);
+                    replacedLines += (m.length === 0 ? 0 : doc.slice(m.index, m.index + m.length).split('\n').length);
+                    if (opts.autoIndent) out += indentReplaceText(replace, getLineIndentAtOffset(doc, m.index));
+                    else out += replace;
+                    last = m.index + m.length;
+                }
+                out += doc.slice(last);
+
+                editor.setValue(out, -1);
+                totalReplaced += matches.length;
+                success++;
+                successList.push({ i: i + 1, count: matches.length, firstLine });
+                addBulkLog(`  ✓ REPLACED ${matches.length} time${matches.length === 1 ? '' : 's'}${replacedLines > 1 ? ` (${replacedLines} lines affected)` : ''}`, 'good');
+            }
+
+            const ms = Date.now() - startTime;
+
+            addBulkLog(``, 'sep');
+            addBulkLog(`════ SUMMARY ════`, 'head');
+            addBulkLog(`⏱  Time: ${ms}ms`, 'info');
+            addBulkLog(`📊 Total pairs: ${total}`, 'info');
+            addBulkLog(`✅ Successful pairs: ${success}`, success > 0 ? 'good' : 'info');
+            addBulkLog(`🔁 Total replacements: ${totalReplaced}`, totalReplaced > 0 ? 'good' : 'info');
+            addBulkLog(`⚠  Skipped pairs: ${skipped}`, skipped > 0 ? 'warn' : 'info');
+            if (ambiguous > 0) addBulkLog(`🔀 Ambiguous pairs (replace = next find): ${ambiguous}`, 'warn');
+
+            if (ambiguousList.length) {
+                addBulkLog(``, 'sep');
+                addBulkLog(`🔀 AMBIGUITY DETAILS:`, 'warn');
+                ambiguousList.forEach(a => {
+                    addBulkLog(`  Pair #${a.i} ka REPLACE = Pair #${a.nextI} ka FIND`, 'warn');
+                    addBulkLog(`    Pair #${a.i} find: "${a.firstLine.slice(0, 50)}"`, 'detail');
+                    addBulkLog(`    Pair #${a.nextI} find: "${a.nextFirstLine.slice(0, 50)}"`, 'detail');
+                    addBulkLog(`    ⚠ Result unpredictable — reorder karo ya merge karo.`, 'detail');
+                });
+            }
+
+            if (skippedList.length) {
+                addBulkLog(``, 'sep');
+                addBulkLog(`⚠ SKIPPED DETAILS:`, 'warn');
+                skippedList.forEach(s => {
+                    addBulkLog(`  #${s.i} → ${s.reason}`, 'warn');
+                    addBulkLog(`      "${s.firstLine.slice(0, 60)}"`, 'detail');
+                });
+            }
+
+            if (successList.length) {
+                addBulkLog(``, 'sep');
+                addBulkLog(`✅ SUCCESS DETAILS:`, 'good');
+                successList.forEach(s => {
+                    addBulkLog(`  #${s.i} → replaced ${s.count}×`, 'good');
+                    addBulkLog(`      "${s.firstLine.slice(0, 60)}"`, 'detail');
+                });
+            }
+
+            addBulkLog(``, 'sep');
+            if (success === total) {
+                addBulkLog(`🎉 ALL SUCCESSFUL — sab ${total} pairs apply hue!`, 'summary');
+            } else if (success > 0) {
+                addBulkLog(`⚡ PARTIAL SUCCESS — ${success}/${total} pairs applied, ${skipped} skipped`, 'summary');
+            } else {
+                addBulkLog(`❌ FAILED — ek bhi pair apply nahi hua`, 'summary');
+            }
+            if (ambiguous > 0) addBulkLog(`⚠ ${ambiguous} ambiguous pair(s) — inhe manual verify karo!`, 'summary');
+
+            setBulkStatus(`${success}/${total} applied · ${totalReplaced} replacements · ${skipped} skipped · ${ms}ms`, success > 0 ? (skipped || ambiguous ? 'warn' : 'good') : 'bad');
+            if (success > 0) localStorage.setItem(BULK_KEY, text);
+        }
+
+        function uploadBulk() {
+            const inp = document.createElement('input');
+            inp.type = 'file';
+            inp.accept = '.txt,.md,text/plain';
+            inp.onchange = async () => {
+                const file = inp.files[0];
+                if (!file) return;
+                try {
+                    const text = await file.text();
+                    $('bulkText').value = text;
+                    const pairs = parseBulk(text);
+                    setBulkStatus(`Loaded ${file.name} (${(file.size / 1024).toFixed(1)} KB) · ${pairs.length} pair${pairs.length === 1 ? '' : 's'} found`, 'good');
+                } catch (e) {
+                    setBulkStatus('Failed to read file: ' + e.message, 'bad');
+                }
+            };
+            inp.click();
+        }
+
+        function clearBulk() {
+            $('bulkText').value = '';
+            clearBulkLog();
+            setBulkStatus('');
+            localStorage.removeItem(BULK_KEY);
+        }
+
+        // ============ TEMPLATE + FORMAT GUIDE ============
+        const TEMPLATE_TXT =
+`FIND BLOCK #1 — YAHAN PEHLA PURANA CODE PASTE KARO
+(line 2 of find 1)
+(line 3 of find 1)
+∆=∆1
+REPLACE BLOCK #1 — YAHAN NAYA CODE PASTE KARO
+(line 2 of replace 1)
+(line 3 of replace 1)
+
+∆separation∆
+
+FIND BLOCK #2 — YAHAN DUSRA PURANA CODE PASTE KARO
+(line 2 of find 2)
+∆=∆2
+REPLACE BLOCK #2 — YAHAN DUSRA NAYA CODE PASTE KARO
+(line 2 of replace 2)
+(line 3 of replace 2)
+
+∆separation∆
+
+FIND BLOCK #3 — YAHAN TEESRA PURANA CODE PASTE KARO
+∆=∆3
+REPLACE BLOCK #3 — YAHAN TEESRA NAYA CODE PASTE KARO
+(line 2 of replace 3)
+`;
+
+        const FORMAT_GUIDE =
+`══════════════════════════════════════════
+   BULK REPLACE — FORMAT GUIDE (v7)
+══════════════════════════════════════════
+
+PURPOSE:
+  Ek single .txt file mein multiple find/replace
+  pairs likh sakte ho. Editor ek click mein
+  saare apply kar dega.
+
+══════════════════════════════════════════
+  1. TWO SEPARATORS — VERY IMPORTANT
+══════════════════════════════════════════
+
+  Marker #1:  ∆=∆   (or ∆=∆1, ∆=∆2 ...)
+      → FIND ko REPLACE se alag karta hai
+      → Ye EK PAIR ke ANDAR hota hai
+
+  Marker #2:  ∆separation∆
+      → EK PAIR ko NEXT PAIR se alag karta hai
+      → Ye PAIRS ke BEECH hota hai
+
+══════════════════════════════════════════
+  2. BASIC FORMAT
+══════════════════════════════════════════
+
+  <FIND BLOCK 1>
+  ∆=∆1
+  <REPLACE BLOCK 1>
+
+  ∆separation∆
+
+  <FIND BLOCK 2>
+  ∆=∆2
+  <REPLACE BLOCK 2>
+
+  ∆separation∆
+
+  <FIND BLOCK 3>
+  ∆=∆3
+  <REPLACE BLOCK 3>
+
+══════════════════════════════════════════
+  3. SAVE / DOWNLOAD FEATURE
+══════════════════════════════════════════
+
+  💾 Save button header mein hai.
+
+  Features:
+   • Custom filename (jaise repo-manager-2)
+   • Extension dropdown (html, txt, md, js, css...)
+   • Custom extension option (pura naam type karo)
+   • Download → browser file save karega
+   • Copy → clipboard mein
+   • Share → Android share sheet
+   • Filename localStorage mein yaad rehta hai
+
+══════════════════════════════════════════
+  4. MATCHING RULES
+══════════════════════════════════════════
+
+  ✓ Smart mode (default ON):
+      - Saare spaces, tabs, newlines IGNORE
+      - Symbols/text EXACT match
+
+  ✓ Auto-indent (default ON):
+      - Replacement target line ki indentation pe
+
+  ✓ Case sensitive (default OFF)
+  ✓ Quotes smart (default OFF)
+
+══════════════════════════════════════════
+  5. TIPS
+══════════════════════════════════════════
+
+  1. Bahut bade code blocks chalte hain.
+
+  2. Agar koi pair nahi mila toh woh skip
+     ho jayega, baaki sab apply honge.
+
+  3. Detailed log niche milega.
+
+  4. Log box mein "Copy Log" button hai.
+
+  5. Backup ke liye pehle editor ka code
+     "💾 Save" se download karke rakh lo.
+
+══════════════════════════════════════════
+  END OF GUIDE
+══════════════════════════════════════════
+`;
+
+        function downloadTemplate() {
+            const blob = new Blob([TEMPLATE_TXT], { type: 'text/plain;charset=utf-8' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'bulk-replace-template.txt';
+            a.click();
+        }
+
+        function openFormatHelper() {
+            $('fmtContent').textContent = FORMAT_GUIDE;
+            $('fmtModal').style.display = 'flex';
+        }
+        function closeFormatHelper() {
+            $('fmtModal').style.display = 'none';
+        }
+        function downloadFormatGuide() {
+            const blob = new Blob([FORMAT_GUIDE], { type: 'text/plain;charset=utf-8' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'bulk-replace-FORMAT-GUIDE.txt';
+            a.click();
+        }
+        function copyFormatGuide() {
+            navigator.clipboard.writeText(FORMAT_GUIDE).then(() => {
+                const btn = document.querySelector('button[onclick="copyFormatGuide()"]');
+                const orig = btn.innerHTML;
+                btn.innerHTML = '✓ Copied';
+                btn.classList.add('bg-[#3fb950]');
+                setTimeout(() => { btn.innerHTML = orig; btn.classList.remove('bg-[#3fb950]'); }, 1500);
+            });
+        }
+        document.getElementById('fmtModal').addEventListener('click', (e) => {
+            if (e.target.id === 'fmtModal') closeFormatHelper();
+        });
+
+        // Persist bulk text
+        $('bulkText').addEventListener('input', () => {
+            clearTimeout(window._bulkSaveTimer);
+            window._bulkSaveTimer = setTimeout(() => {
+                localStorage.setItem(BULK_KEY, $('bulkText').value);
+            }, 800);
+        });
+        const savedBulk = localStorage.getItem(BULK_KEY);
+        if (savedBulk) $('bulkText').value = savedBulk;
+
+        // ============ Go to line ============
+        function doGoto(line) {
+            let n = line;
+            if (n === undefined) n = parseInt($('gotoInput').value, 10);
+            else $('gotoInput').value = n;
+            if (!n || n < 1) return;
+            const total = lastLine();
+            if (n > total) n = total;
+            editor.gotoLine(n, 0, true);
+            editor.focus();
+        }
+        $('gotoInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doGoto(); } });
+
+        // ============ Recent ============
+        let recents = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+        function pushRecent(text) {
+            if (!text) return;
+            recents = [text, ...recents.filter(x => x !== text)].slice(0, 8);
+            localStorage.setItem(RECENT_KEY, JSON.stringify(recents));
+            renderRecent();
+        }
+        function renderRecent() {
+            const wrap = $('recentWrap'), list = $('recentList');
+            list.innerHTML = '';
+            if (!recents.length) { wrap.classList.add('hidden'); return; }
+            wrap.classList.remove('hidden');
+            recents.forEach(t => {
+                const b = document.createElement('button');
+                b.className = 'tbtn tbtn-sm bg-[#0d1117] border border-[#30363d] text-[#c9d1d9] shrink-0 font-mono';
+                b.style.padding = '0 10px';
+                b.style.fontSize = '11px';
+                const preview = t.split('\n')[0].slice(0, 24) + (t.length > 24 ? '…' : '');
+                b.textContent = preview;
+                b.title = t.slice(0, 120);
+                b.onclick = () => { $('findText').value = t; liveCount(); };
+                list.appendChild(b);
+            });
+        }
+
+        // ============ Clear ============
+        function clearCode() {
+            if (confirm('Clear the editor? Cannot be undone.')) {
+                editor.setValue('', -1);
+                localStorage.removeItem(CACHE_KEY);
+            }
+        }
+
+        // ============ Shortcuts ============
+        editor.commands.addCommand({ name: 'find', bindKey: { win: 'Ctrl-F', mac: 'Cmd-F' }, exec: () => toggleFind() });
+        editor.commands.addCommand({ name: 'bulk', bindKey: { win: 'Ctrl-B', mac: 'Cmd-B' }, exec: () => toggleBulk() });
+        editor.commands.addCommand({ name: 'saveAs', bindKey: { win: 'Ctrl-Shift-S', mac: 'Cmd-Shift-S' }, exec: () => toggleSave() });
+        editor.commands.addCommand({ name: 'goto', bindKey: { win: 'Ctrl-G', mac: 'Cmd-G' }, exec: () => toggleGoto() });
+        editor.commands.addCommand({ name: 'save', bindKey: { win: 'Ctrl-S', mac: 'Cmd-S' }, exec: () => {
+            localStorage.setItem(CACHE_KEY, editor.getValue());
+            $('saveStatus').innerText = 'saved';
+            $('saveStatus').style.color = '#3fb950';
+            toggleSave();
+        }});
+
+        // ============ Init ============
+        renderRecent();
+        editor.focus();
+    </script>
+</body>
+</html>
