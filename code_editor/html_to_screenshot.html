@@ -1,12 +1,11 @@
-
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pro HTML Renderer & Capture Tool</title>
+    <title>Flagship HTML Capture Engine</title>
     
-    <!-- Fonts: Inter -->
+    <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -17,8 +16,8 @@
     <!-- html2canvas -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <script>
         tailwind.config = {
@@ -29,9 +28,11 @@
                         sans: ['Inter', 'sans-serif'],
                     },
                     colors: {
-                        darkBg: '#0b0f19',
-                        glassBg: 'rgba(255, 255, 255, 0.03)',
+                        darkBg: '#080B12',
+                        glassPanel: 'rgba(20, 25, 40, 0.55)',
                         glassBorder: 'rgba(255, 255, 255, 0.08)',
+                        accentPrimary: '#00F0FF', // Neon Cyan
+                        accentSecondary: '#8A2BE2', // Neon Purple
                     }
                 }
             }
@@ -40,189 +41,358 @@
 
     <style>
         body {
-            background-color: #0b0f19;
+            background-color: #080B12;
             background-image: 
-                radial-gradient(circle at 15% 50%, rgba(79, 70, 229, 0.15), transparent 25%),
-                radial-gradient(circle at 85% 30%, rgba(16, 185, 129, 0.15), transparent 25%);
+                radial-gradient(circle at 10% 20%, rgba(138, 43, 226, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(0, 240, 255, 0.1) 0%, transparent 40%);
             background-attachment: fixed;
-            color: #f8fafc;
+            color: #E2E8F0;
+            overflow-x: hidden;
         }
 
-        /* Glassmorphism Panel */
-        .glass-panel {
-            background: var(--glassBg);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
+        /* Glassmorphism Classes */
+        .glass {
+            background: var(--glassPanel);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
             border: 1px solid var(--glassBorder);
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+        
+        .glass-btn {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+        
+        .glass-btn:hover {
+            background: rgba(255,255,255,0.08);
+            border-color: rgba(255,255,255,0.2);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+        }
+
+        .active-view-btn {
+            background: rgba(0, 240, 255, 0.15) !important;
+            border-color: rgba(0, 240, 255, 0.5) !important;
+            color: #00F0FF !important;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.2) !important;
+        }
+
+        /* Gradient Text */
+        .text-gradient {
+            background: linear-gradient(90deg, #00F0FF, #8A2BE2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Primary Button Glow */
+        .btn-glow {
+            background: linear-gradient(135deg, #00F0FF 0%, #0073FF 100%);
+            box-shadow: 0 0 20px rgba(0, 115, 255, 0.4);
+            color: #000;
+            border: none;
+            transition: all 0.3s ease;
+        }
+        .btn-glow:hover {
+            box-shadow: 0 0 30px rgba(0, 240, 255, 0.6);
+            transform: translateY(-2px);
         }
 
         /* Custom Scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.15);
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
 
-        /* Drag and drop active state */
+        /* Drag Zone Active */
         .drag-active {
-            border-color: #6366f1 !important;
-            background: rgba(99, 102, 241, 0.1) !important;
+            border-color: #00F0FF !important;
+            background: rgba(0, 240, 255, 0.05) !important;
+            box-shadow: inset 0 0 30px rgba(0, 240, 255, 0.1);
         }
 
-        .spinner {
-            animation: spin 1s linear infinite;
+        /* Device Wrapper Transitions */
+        .device-wrapper {
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            margin: 0 auto;
+            position: relative;
+            background: #ffffff; /* Explicit white background for standard rendering */
         }
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+        
+        .device-mobile {
+            width: 390px;
+            height: 800px;
+            border-radius: 40px;
+            border: 12px solid #111520;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255,255,255,0.1);
+            overflow: hidden;
+        }
+        
+        .device-desktop {
+            width: 100%;
+            height: 100%;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        #preview-frame {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background-color: transparent;
         }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-6 lg:p-8 flex flex-col font-sans">
 
-    <!-- Header -->
-    <header class="glass-panel rounded-2xl p-5 mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+    <!-- Top Navigation / Header -->
+    <header class="glass rounded-2xl p-4 md:p-5 mb-6 flex flex-col md:flex-row items-center justify-between gap-4 z-10 relative">
         <div class="flex items-center gap-4">
-            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                <i data-lucide="scan-line" class="w-6 h-6 text-white"></i>
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-cyan-500/20 to-purple-600/20 border border-cyan-500/30">
+                <i class="fa-solid fa-code text-2xl text-gradient"></i>
             </div>
             <div>
-                <h1 class="text-xl font-bold text-white tracking-tight">CodeCapture Pro</h1>
-                <p class="text-sm text-gray-400">Render HTML files & export HD screenshots instantly</p>
+                <h1 class="text-xl md:text-2xl font-bold tracking-tight text-white">Quantum<span class="text-gradient">Render</span></h1>
+                <p class="text-xs text-gray-400">Pro HTML Engine & High-Res Capture</p>
             </div>
         </div>
-        <div class="flex items-center gap-3">
-             <button onclick="renderPreview()" class="px-5 py-2.5 rounded-xl font-medium text-white bg-white/10 hover:bg-white/20 border border-white/10 transition-all flex items-center gap-2 active:scale-95 text-sm">
-                <i data-lucide="play" class="w-4 h-4"></i>
-                Render Code
+
+        <!-- View Controls & Actions -->
+        <div class="flex flex-wrap items-center gap-3 bg-black/40 p-1.5 rounded-xl border border-white/5">
+            <!-- Mobile/Desktop Toggle -->
+            <div class="flex items-center gap-1 bg-black/50 p-1 rounded-lg border border-white/5 mr-2">
+                <button onclick="setViewMode('mobile')" id="btn-mobile" class="active-view-btn px-4 py-2 rounded-md text-sm font-semibold text-gray-400 transition-all flex items-center gap-2">
+                    <i class="fa-solid fa-mobile-screen-button"></i> Mobile
+                </button>
+                <button onclick="setViewMode('desktop')" id="btn-desktop" class="glass-btn px-4 py-2 rounded-md text-sm font-semibold text-gray-400 transition-all flex items-center gap-2">
+                    <i class="fa-solid fa-desktop"></i> Desktop
+                </button>
+            </div>
+
+            <!-- Action Buttons -->
+            <button onclick="renderCode()" class="glass-btn px-5 py-2.5 rounded-lg text-sm font-semibold text-white flex items-center gap-2">
+                <i class="fa-solid fa-play text-emerald-400"></i> Render
             </button>
-            <button id="capture-btn" onclick="takeHighQualityScreenshot()" class="px-5 py-2.5 rounded-xl font-medium text-white bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-2 active:scale-95 text-sm disabled:opacity-70 disabled:cursor-wait disabled:scale-100">
-                <i id="capture-icon" data-lucide="download" class="w-4 h-4"></i>
-                <i id="loading-icon" data-lucide="loader-2" class="w-4 h-4 spinner hidden"></i>
-                <span id="capture-text">Download HD</span>
+            <button id="capture-btn" onclick="takeFullPageScreenshot()" class="btn-glow px-6 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                <i id="capture-icon" class="fa-solid fa-camera-retro"></i>
+                <i id="loading-icon" class="fa-solid fa-circle-notch fa-spin hidden"></i>
+                <span id="capture-text">HD Capture</span>
             </button>
         </div>
     </header>
 
     <!-- Main Workspace -->
-    <main class="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-140px)] min-h-[600px]">
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[600px] z-10 relative">
         
-        <!-- Left: Input Controls -->
-        <section class="flex flex-col gap-4 h-full">
+        <!-- LEFT PANEL: Upload & Editor (Col span 5) -->
+        <section class="lg:col-span-5 flex flex-col gap-5 h-full">
             
-            <!-- Drag & Drop Upload Zone -->
-            <div id="drop-zone" class="glass-panel rounded-2xl p-8 border-2 border-dashed border-gray-600 hover:border-indigo-400 transition-colors flex flex-col items-center justify-center gap-3 cursor-pointer group text-center" onclick="document.getElementById('file-upload').click()">
-                <div class="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <i data-lucide="file-code-2" class="w-6 h-6 text-indigo-400"></i>
+            <!-- Drag & Drop Zone -->
+            <div id="drop-zone" onclick="document.getElementById('file-upload').click()" 
+                 class="glass rounded-2xl p-8 border-2 border-dashed border-gray-600 hover:border-cyan-400 transition-all cursor-pointer group text-center flex flex-col items-center justify-center gap-3 relative overflow-hidden">
+                <!-- Ambient glow inside dropzone -->
+                <div class="absolute inset-0 bg-gradient-to-b from-cyan-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                
+                <div class="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center border border-white/10 group-hover:scale-110 group-hover:bg-cyan-500/10 group-hover:text-cyan-400 transition-all z-10">
+                    <i class="fa-solid fa-cloud-arrow-up text-2xl text-gray-400 group-hover:text-cyan-400 transition-colors"></i>
                 </div>
-                <div>
-                    <h3 class="font-semibold text-gray-200">Upload HTML File</h3>
-                    <p class="text-xs text-gray-500 mt-1">Drag & drop or click to browse (Only .html allowed)</p>
+                <div class="z-10">
+                    <h3 class="font-bold text-gray-200 text-lg">Upload .HTML File</h3>
+                    <p class="text-xs text-gray-400 mt-1">Drag & drop or click to browse</p>
                 </div>
                 <input type="file" id="file-upload" accept=".html" class="hidden" onchange="handleFileSelect(event)">
             </div>
 
-            <!-- Code Editor Textarea -->
-            <div class="glass-panel rounded-2xl flex-1 flex flex-col overflow-hidden">
-                <div class="px-4 py-3 border-b border-white/5 bg-white/5 flex items-center justify-between">
+            <!-- Code Editor -->
+            <div class="glass rounded-2xl flex-1 flex flex-col overflow-hidden relative">
+                <div class="px-4 py-3 border-b border-white/10 bg-black/40 flex items-center justify-between z-10">
                     <div class="flex items-center gap-2">
-                        <i data-lucide="code" class="w-4 h-4 text-indigo-400"></i>
-                        <h2 class="text-sm font-medium text-gray-300">Manual Code Editor</h2>
+                        <i class="fa-solid fa-code text-purple-400"></i>
+                        <span class="text-sm font-semibold text-gray-300">Live Editor</span>
                     </div>
-                    <button onclick="clearCode()" class="text-xs text-gray-500 hover:text-red-400 transition-colors flex items-center gap-1">
-                        <i data-lucide="trash-2" class="w-3 h-3"></i> Clear
+                    <button onclick="clearEditor()" class="text-xs text-gray-500 hover:text-red-400 transition-colors flex items-center gap-1" title="Clear Code">
+                        <i class="fa-solid fa-trash-can"></i> Clear
                     </button>
                 </div>
-                <textarea id="code-input" class="w-full h-full p-4 bg-transparent border-none text-sm font-mono text-gray-300 focus:outline-none resize-none placeholder-gray-600 leading-relaxed" placeholder="<html>&#10;  <body>&#10;    <h1>Hello World</h1>&#10;  </body>&#10;</html>"></textarea>
+                <textarea id="code-input" class="w-full h-full p-4 bg-transparent border-none text-[13px] font-mono text-gray-300 focus:outline-none resize-none placeholder-gray-600 leading-relaxed z-10" 
+                          spellcheck="false" placeholder="<!-- Paste your HTML/CSS/JS here -->"></textarea>
             </div>
         </section>
 
-        <!-- Right: Live Preview -->
-        <section class="glass-panel rounded-2xl flex flex-col overflow-hidden h-full">
-            <div class="px-4 py-3 border-b border-white/5 bg-white/5 flex items-center justify-between">
+        <!-- RIGHT PANEL: Live Preview Engine (Col span 7) -->
+        <section class="lg:col-span-7 glass rounded-2xl flex flex-col overflow-hidden h-[800px] lg:h-auto relative">
+            <div class="px-4 py-3 border-b border-white/10 bg-black/40 flex items-center justify-between z-10 shrink-0">
                 <div class="flex items-center gap-2">
-                    <i data-lucide="layout" class="w-4 h-4 text-emerald-400"></i>
-                    <h2 class="text-sm font-medium text-gray-300">Live Render Preview</h2>
+                    <i class="fa-solid fa-eye text-cyan-400"></i>
+                    <span class="text-sm font-semibold text-gray-300">Engine Preview</span>
                 </div>
-                <div class="flex items-center gap-1.5 text-xs text-gray-500">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    Live
+                <div class="flex items-center gap-2 text-xs font-mono text-gray-500 bg-black/50 px-2 py-1 rounded">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Online
                 </div>
             </div>
             
-            <div class="flex-1 p-4 bg-black/40 overflow-auto relative rounded-b-2xl" id="iframe-container">
-                <!-- Empty State -->
-                <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500 pointer-events-none z-10">
-                    <i data-lucide="monitor-x" class="w-10 h-10 mb-2 opacity-50"></i>
-                    <p class="text-sm">No code to preview yet</p>
+            <!-- Iframe Container -->
+            <div class="flex-1 p-4 md:p-8 overflow-y-auto bg-black/20 flex flex-col items-center justify-start relative w-full custom-scrollbar" id="preview-scroll-container">
+                
+                <!-- The dynamically resizing wrapper based on view mode -->
+                <div id="device-frame" class="device-wrapper device-mobile shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+                    <iframe id="preview-frame" sandbox="allow-scripts allow-same-origin"></iframe>
                 </div>
 
-                <!-- Iframe wrapper for accurate height expansion -->
-                <div class="w-full bg-white rounded-lg overflow-hidden shadow-2xl relative transition-all mx-auto min-h-full" id="iframe-wrapper">
-                    <!-- The iframe background is explicitly set to white so output is clear -->
-                    <iframe id="preview-frame" class="w-full h-full border-none bg-white opacity-0 transition-opacity duration-300 absolute inset-0"></iframe>
-                </div>
             </div>
         </section>
 
     </main>
 
     <script>
-        // Initialize Icons
-        lucide.createIcons();
-
-        const dropZone = document.getElementById('drop-zone');
-        const fileInput = document.getElementById('file-upload');
-        const codeInput = document.getElementById('code-input');
-        const iframe = document.getElementById('preview-frame');
-        const iframeWrapper = document.getElementById('iframe-wrapper');
-        const emptyState = document.getElementById('empty-state');
-
-        // Initial Demo content
-        const initialHTML = `<!DOCTYPE html>
-<html>
+        /* --- Default Complex Mobile UI to demonstrate squish-free rendering --- */
+        const defaultMobileAppTemplate = `<!DOCTYPE html>
+<html lang="en">
 <head>
-<style>
-  body { 
-    font-family: 'Inter', sans-serif; 
-    margin: 0; padding: 40px; 
-    background: #f8fafc; color: #0f172a;
-    display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh;
-  }
-  .card {
-    background: white; padding: 40px; border-radius: 16px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.05); text-align: center; max-width: 500px;
-  }
-  h1 { font-size: 28px; margin-bottom: 10px; color: #4f46e5; }
-  p { line-height: 1.6; color: #64748b; margin-bottom: 20px; }
-  .badge { background: #e0e7ff; color: #4338ca; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"><\/script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { background: #0F172A; color: white; font-family: sans-serif; margin: 0; min-height: 1200px; } /* Long height to test scroll capture */
+        .glass-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; }
+        .bg-gradient-custom { background: linear-gradient(135deg, #FF3366 0%, #FF9933 100%); }
+    </style>
 </head>
-<body>
-  <div class="card">
-    <span class="badge">Success</span>
-    <h1>Ready for Capture</h1>
-    <p>Upload a .html file or type your code on the left. Once rendered, click the <b>Download HD</b> button to capture a 3x resolution screenshot of this entire frame.</p>
-  </div>
+<body class="p-4 pb-32">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-8 pt-4">
+        <div>
+            <p class="text-gray-400 text-sm">Welcome back,</p>
+            <h1 class="text-2xl font-bold">Alex 🚀</h1>
+        </div>
+        <div class="w-12 h-12 rounded-full bg-gradient-custom shadow-lg flex items-center justify-center shadow-[#FF3366]/30">
+            <i class="fa-solid fa-user text-white"></i>
+        </div>
+    </div>
+
+    <!-- Main Card -->
+    <div class="glass-card p-6 mb-6 relative overflow-hidden">
+        <div class="absolute top-0 right-0 w-32 h-32 bg-purple-500/20 rounded-full blur-2xl"></div>
+        <h2 class="text-3xl font-bold mb-1">$12,450.00</h2>
+        <p class="text-emerald-400 text-sm font-semibold mb-6">+2.4% today</p>
+        <div class="flex gap-4">
+            <button class="flex-1 bg-white text-black py-3 rounded-xl font-bold shadow-lg">Send</button>
+            <button class="flex-1 bg-white/10 text-white border border-white/20 py-3 rounded-xl font-bold backdrop-blur-md">Receive</button>
+        </div>
+    </div>
+
+    <!-- Long List to test scrolling capture -->
+    <h3 class="font-bold text-lg mb-4 mt-8">Recent Activity</h3>
+    <div class="space-y-4">
+        <!-- Item 1 -->
+        <div class="glass-card p-4 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-orange-500/20 flex items-center justify-center text-orange-400"><i class="fa-brands fa-amazon"></i></div>
+                <div><h4 class="font-bold">Amazon Prime</h4><p class="text-xs text-gray-400">Subscription</p></div>
+            </div>
+            <span class="font-bold text-red-400">-$14.99</span>
+        </div>
+        <!-- Item 2 -->
+        <div class="glass-card p-4 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400"><i class="fa-solid fa-briefcase"></i></div>
+                <div><h4 class="font-bold">Salary</h4><p class="text-xs text-gray-400">Monthly</p></div>
+            </div>
+            <span class="font-bold text-emerald-400">+$4,200.00</span>
+        </div>
+        <!-- Item 3 -->
+        <div class="glass-card p-4 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center text-green-400"><i class="fa-brands fa-spotify"></i></div>
+                <div><h4 class="font-bold">Spotify</h4><p class="text-xs text-gray-400">Music</p></div>
+            </div>
+            <span class="font-bold text-red-400">-$9.99</span>
+        </div>
+         <!-- Item 4 (To make it scroll) -->
+         <div class="glass-card p-4 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400"><i class="fa-solid fa-gamepad"></i></div>
+                <div><h4 class="font-bold">Steam Games</h4><p class="text-xs text-gray-400">Entertainment</p></div>
+            </div>
+            <span class="font-bold text-red-400">-$59.99</span>
+        </div>
+        <!-- Item 5 -->
+        <div class="glass-card p-4 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-yellow-500/20 flex items-center justify-center text-yellow-400"><i class="fa-solid fa-burger"></i></div>
+                <div><h4 class="font-bold">Uber Eats</h4><p class="text-xs text-gray-400">Food</p></div>
+            </div>
+            <span class="font-bold text-red-400">-$24.50</span>
+        </div>
+        <div class="p-8 text-center text-gray-500 text-sm">
+            End of list. The screenshot engine should capture all the way down here without squishing!
+        </div>
+    </div>
+
+    <!-- Fixed Bottom Nav -->
+    <div class="fixed bottom-0 left-0 w-full p-4 z-50">
+        <div class="glass-card w-full py-4 px-8 flex justify-between items-center rounded-2xl">
+            <i class="fa-solid fa-house text-white text-xl"></i>
+            <i class="fa-solid fa-chart-pie text-gray-500 text-xl hover:text-white transition"></i>
+            <i class="fa-solid fa-bell text-gray-500 text-xl hover:text-white transition"></i>
+            <i class="fa-solid fa-gear text-gray-500 text-xl hover:text-white transition"></i>
+        </div>
+    </div>
 </body>
 </html>`;
 
-        // Set initial state
-        codeInput.value = initialHTML;
-        setTimeout(renderPreview, 100);
+        // --- Core Elements ---
+        const codeInput = document.getElementById('code-input');
+        const iframe = document.getElementById('preview-frame');
+        const deviceFrame = document.getElementById('device-frame');
+        const dropZone = document.getElementById('drop-zone');
 
-        // Drag and Drop Logic
+        // Set initial code and render
+        codeInput.value = defaultMobileAppTemplate;
+        setTimeout(renderCode, 200);
+
+        // --- View Mode Logic ---
+        let currentMode = 'mobile';
+        function setViewMode(mode) {
+            currentMode = mode;
+            const btnMobile = document.getElementById('btn-mobile');
+            const btnDesktop = document.getElementById('btn-desktop');
+
+            if (mode === 'mobile') {
+                btnMobile.classList.add('active-view-btn');
+                btnMobile.classList.remove('glass-btn');
+                btnDesktop.classList.remove('active-view-btn');
+                btnDesktop.classList.add('glass-btn');
+                
+                deviceFrame.className = 'device-wrapper device-mobile shadow-[0_0_50px_rgba(0,0,0,0.5)]';
+            } else {
+                btnDesktop.classList.add('active-view-btn');
+                btnDesktop.classList.remove('glass-btn');
+                btnMobile.classList.remove('active-view-btn');
+                btnMobile.classList.add('glass-btn');
+                
+                deviceFrame.className = 'device-wrapper device-desktop';
+            }
+        }
+
+        // --- Editor Engine ---
+        function clearEditor() {
+            codeInput.value = '';
+            renderCode();
+        }
+
+        function renderCode() {
+            const code = codeInput.value;
+            const doc = iframe.contentWindow.document;
+            
+            doc.open();
+            doc.write(code);
+            doc.close();
+        }
+
+        // --- Drag & Drop Engine (HTML only) ---
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             dropZone.addEventListener(eventName, preventDefaults, false);
         });
@@ -244,130 +414,132 @@
             const dt = e.dataTransfer;
             const files = dt.files;
             handleFiles(files);
-        }, false);
+        });
 
         function handleFileSelect(e) {
             handleFiles(e.target.files);
-            // Reset input so same file can be uploaded again if needed
-            e.target.value = '';
+            e.target.value = ''; // Reset
         }
 
         function handleFiles(files) {
             if (files.length === 0) return;
             const file = files[0];
             
-            // Validate File Type
             if (!file.name.toLowerCase().endsWith('.html') && file.type !== 'text/html') {
-                alert('Please upload a valid .html file.');
+                alert('Strict Mode: Only .html files are permitted.');
                 return;
             }
 
-            // Read File
             const reader = new FileReader();
             reader.onload = (e) => {
                 codeInput.value = e.target.result;
-                renderPreview();
+                renderCode();
             };
             reader.readAsText(file);
         }
 
-        function clearCode() {
-            codeInput.value = '';
-            renderPreview();
-        }
-
-        // Render HTML to Iframe
-        function renderPreview() {
-            const code = codeInput.value;
-            const doc = iframe.contentWindow.document;
-            
-            if (code.trim() === '') {
-                iframe.style.opacity = '0';
-                emptyState.style.display = 'flex';
-                return;
-            }
-
-            doc.open();
-            doc.write(code);
-            doc.close();
-
-            emptyState.style.display = 'none';
-            iframe.style.opacity = '1';
-        }
-
-        // Advanced Screenshot Capture Logic
-        async function takeHighQualityScreenshot() {
+        // --- THE CRITICAL FIX: Robust Full Page Screenshot Logic ---
+        async function takeFullPageScreenshot() {
             const doc = iframe.contentWindow.document;
             if (!doc.body || doc.body.innerHTML.trim() === '') {
-                alert("Nothing to capture. Please render some HTML first.");
+                alert("The preview engine is empty. Please render some code first.");
                 return;
             }
 
             const btn = document.getElementById('capture-btn');
-            const captureIcon = document.getElementById('capture-icon');
-            const loadingIcon = document.getElementById('loading-icon');
-            const captureText = document.getElementById('capture-text');
+            const icon = document.getElementById('capture-icon');
+            const loader = document.getElementById('loading-icon');
+            const text = document.getElementById('capture-text');
 
-            // Set Loading UI
+            // UI Loading State
             btn.disabled = true;
-            captureIcon.classList.add('hidden');
-            loadingIcon.classList.remove('hidden');
-            captureText.innerText = "Processing...";
+            icon.classList.add('hidden');
+            loader.classList.remove('hidden');
+            text.innerText = "Processing HD...";
 
             try {
-                // 1. Calculate Full Height of Content
-                const body = doc.body;
-                const html = doc.documentElement;
-                
-                // Get the absolute max height the content requires
-                const fullHeight = Math.max(
-                    body.scrollHeight, body.offsetHeight,
-                    html.clientHeight, html.scrollHeight, html.offsetHeight
-                );
+                // STEP A: Inject strict CSS to force iframe content to expose its full height natively
+                const styleId = 'screenshot-enforcer-style';
+                let style = doc.getElementById(styleId);
+                if (!style) {
+                    style = doc.createElement('style');
+                    style.id = styleId;
+                    // Forcing height: auto, removing overflow clipping, ensuring document spans all content
+                    style.innerHTML = `
+                        html, body {
+                            height: auto !important;
+                            min-height: max-content !important;
+                            overflow: visible !important;
+                            position: relative !important;
+                        }
+                    `;
+                    doc.head.appendChild(style);
+                }
 
-                // 2. Setup styles temporarily to allow full rendering
-                // Remove absolute positioning momentarily so wrapper dictates height
-                iframe.style.position = 'relative'; 
-                iframeWrapper.style.height = `${fullHeight}px`;
+                // Wait a moment for the DOM to recalculate layouts with new styles
+                await new Promise(r => setTimeout(r, 150));
+
+                // STEP B: Measure the newly forced scrollHeight
+                const fullHeight = Math.max(
+                    doc.body.scrollHeight, 
+                    doc.documentElement.scrollHeight,
+                    doc.body.offsetHeight
+                );
+                
+                // Save original iframe wrapper & iframe physical dimensions to revert later
+                const originalWrapperHeight = deviceFrame.style.height;
+                const originalIframeHeight = iframe.style.height;
+                const originalBorderRadius = deviceFrame.style.borderRadius;
+
+                // Temporarily expand the physical iframe to match the content height 
+                // so html2canvas sees the whole unclipped DOM
+                deviceFrame.style.height = `${fullHeight}px`;
+                deviceFrame.style.borderRadius = '0'; // Remove rounding artifacts during capture
                 iframe.style.height = `${fullHeight}px`;
 
-                // Give browser time to repaint the expanded iframe
-                await new Promise(r => setTimeout(r, 400));
+                // Give the browser time to physically paint the expanded iframe
+                await new Promise(r => setTimeout(r, 350));
 
-                // 3. Capture with html2canvas (Scale 3 for HD)
-                const canvas = await html2canvas(body, {
+                // STEP C: Capture using html2canvas with Scale: 3
+                const canvas = await html2canvas(doc.body, {
                     scale: 3, 
                     useCORS: true,
                     allowTaint: true,
-                    backgroundColor: window.getComputedStyle(body).backgroundColor || '#ffffff',
-                    windowHeight: fullHeight // Inform html2canvas of the true height
+                    windowHeight: fullHeight, // Tell html2canvas the true window height
+                    height: fullHeight,       // Tell html2canvas to map exactly this height
+                    backgroundColor: window.getComputedStyle(doc.body).backgroundColor || '#ffffff',
+                    scrollX: 0,
+                    scrollY: 0
                 });
 
-                // 4. Restore original styles
-                iframe.style.position = 'absolute';
-                iframeWrapper.style.height = 'auto';
-                iframe.style.height = '100%';
+                // STEP D: Revert everything back to normal
+                doc.head.removeChild(style);
+                deviceFrame.style.height = originalWrapperHeight || (currentMode === 'mobile' ? '800px' : '100%');
+                deviceFrame.style.borderRadius = originalBorderRadius || (currentMode === 'mobile' ? '40px' : '12px');
+                iframe.style.height = originalIframeHeight || '100%';
 
-                // 5. Download the image
+                // STEP E: Generate Image and Download
                 const imgData = canvas.toDataURL('image/png');
                 const link = document.createElement('a');
-                link.download = `HD_Render_${new Date().getTime()}.png`;
+                link.download = `QuantumRender_HD_${new Date().getTime()}.png`;
                 link.href = imgData;
                 link.click();
 
             } catch (error) {
                 console.error("Capture Error:", error);
-                alert("An error occurred while generating the screenshot.");
-                // Restore styles in case of error
-                iframe.style.position = 'absolute';
-                iframeWrapper.style.height = 'auto';
+                alert("An error occurred during capture. Check the console.");
+                
+                // Fallback cleanup
+                const style = doc.getElementById('screenshot-enforcer-style');
+                if(style) doc.head.removeChild(style);
+                deviceFrame.style.height = currentMode === 'mobile' ? '800px' : '100%';
                 iframe.style.height = '100%';
             } finally {
                 // Restore Button UI
                 btn.disabled = false;
-                captureIcon.classList.remove('hidden');
-                loadingIcon.classList.add('hidden');
-                captureText.innerText = "Download HD";
+                icon.classList.remove('hidden');
+                loader.classList.add('hidden');
+                text.innerText = "HD Capture";
             }
         }
     </script>
