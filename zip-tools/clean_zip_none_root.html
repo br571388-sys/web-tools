@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zip Restructurer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #0f172a, #1e1b4b);
+            color: #e2e8f0;
+            font-family: system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+        }
+        input[type="checkbox"] {
+            accent-color: #6366f1;
+            width: 1.25rem;
+            height: 1.25rem;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 flex items-center justify-center">
+
+    <div class="glass-panel rounded-2xl w-full max-w-2xl p-6 md:p-8 flex flex-col gap-5">
+        <div class="text-center">
+            <h1 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-400">
+                Zip Extractor & Builder
+            </h1>
+            <p class="text-sm text-gray-400 mt-1">Bypass main folder aur specific files select karo</p>
+        </div>
+
+        <div class="border-2 border-dashed border-indigo-500/40 rounded-xl p-8 text-center hover:bg-indigo-500/10 transition-colors cursor-pointer" id="drop-zone">
+            <input type="file" id="file-input" accept=".zip" class="hidden" />
+            <label for="file-input" class="cursor-pointer flex flex-col items-center justify-center gap-2">
+                <svg class="w-12 h-12 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                <span class="text-lg font-medium text-gray-200">Tap to upload ZIP</span>
+                <span id="file-name" class="text-sm text-gray-400">No file selected</span>
+            </label>
+        </div>
+
+        <div id="selection-area" class="hidden flex flex-col gap-4">
+            <div class="flex justify-between items-center bg-gray-800/40 p-3 rounded-lg border border-gray-700/50">
+                <span class="text-sm text-gray-300">Main Folder: <strong id="main-folder-name" class="text-cyan-400"></strong></span>
+                <div class="space-x-2">
+                    <button onclick="selectAll(true)" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors">Select All</button>
+                    <button onclick="selectAll(false)" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition-colors">Deselect</button>
+                </div>
+            </div>
+
+            <div id="file-list" class="glass-panel p-3 rounded-xl max-h-72 overflow-y-auto custom-scroll flex flex-col gap-1">
+                <!-- Checkboxes JS se yahan aayenge -->
+            </div>
+
+            <button id="generate-btn" class="w-full mt-2 py-3.5 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-400 hover:to-blue-500 text-white font-semibold rounded-xl shadow-lg transform active:scale-95 transition-all flex justify-center items-center gap-2">
+                <span id="btn-text">Generate New ZIP</span>
+                <div id="loader" class="hidden w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let currentZip = null;
+        let baseFolder = "";
+        let topLevelItems = new Set();
+        let allZipPaths = [];
+
+        const fileInput = document.getElementById('file-input');
+        const fileNameDisplay = document.getElementById('file-name');
+        const selectionArea = document.getElementById('selection-area');
+        const fileListContainer = document.getElementById('file-list');
+        const mainFolderNameDisplay = document.getElementById('main-folder-name');
+        const generateBtn = document.getElementById('generate-btn');
+        const btnText = document.getElementById('btn-text');
+        const loader = document.getElementById('loader');
+
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            fileNameDisplay.textContent = file.name;
+            selectionArea.classList.remove('hidden');
+            fileListContainer.innerHTML = '<p class="text-center text-gray-400 py-4">Reading zip contents...</p>';
+
+            try {
+                const zip = new JSZip();
+                currentZip = await zip.loadAsync(file);
+                allZipPaths = Object.keys(currentZip.files);
+                analyzeStructure();
+            } catch (err) {
+                fileListContainer.innerHTML = `<p class="text-red-400 text-center py-4">Error: ${err.message}</p>`;
+            }
+        });
+
+        function analyzeStructure() {
+            let rootPaths = new Set();
+            allZipPaths.forEach(path => {
+                const parts = path.split('/');
+                if (parts[0]) rootPaths.add(parts[0]);
+            });
+
+            // Detect wrapper folder
+            if (rootPaths.size === 1 && allZipPaths.some(p => p.startsWith(Array.from(rootPaths)[0] + '/'))) {
+                baseFolder = Array.from(rootPaths)[0] + '/';
+                mainFolderNameDisplay.textContent = Array.from(rootPaths)[0];
+            } else {
+                baseFolder = ""; 
+                mainFolderNameDisplay.textContent = "Root (No main folder found)";
+            }
+
+            topLevelItems.clear();
+            allZipPaths.forEach(path => {
+                if (path.startsWith(baseFolder) && path !== baseFolder) {
+                    let relative = path.substring(baseFolder.length);
+                    let topName = relative.split('/')[0];
+                    if (topName) topLevelItems.add(topName);
+                }
+            });
+
+            renderList();
+        }
+
+        function renderList() {
+            fileListContainer.innerHTML = '';
+            
+            if (topLevelItems.size === 0) {
+                fileListContainer.innerHTML = '<p class="text-gray-400 text-center py-4">Zip is empty.</p>';
+                return;
+            }
+
+            Array.from(topLevelItems).sort().forEach(item => {
+                const isDir = allZipPaths.some(p => p.startsWith(baseFolder + item + '/'));
+                const icon = isDir ? '📁' : '📄';
+
+                const div = document.createElement('div');
+                div.className = "flex items-center p-2.5 hover:bg-white/5 rounded-lg transition-colors cursor-pointer";
+                div.innerHTML = `
+                    <input type="checkbox" id="chk-${item}" value="${item}" class="item-chk mr-3" checked />
+                    <label for="chk-${item}" class="cursor-pointer flex-1 select-none text-gray-200 text-sm font-medium">
+                        <span class="mr-2">${icon}</span> ${item}
+                    </label>
+                `;
+                fileListContainer.appendChild(div);
+            });
+        }
+
+        function selectAll(check) {
+            document.querySelectorAll('.item-chk').forEach(cb => cb.checked = check);
+        }
+
+        generateBtn.addEventListener('click', async () => {
+            const selected = Array.from(document.querySelectorAll('.item-chk:checked')).map(cb => cb.value);
+            
+            if (selected.length === 0) {
+                alert("Kam se kam ek file/folder select karo!");
+                return;
+            }
+
+            generateBtn.disabled = true;
+            loader.classList.remove('hidden');
+            btnText.textContent = 'Processing...';
+
+            try {
+                const newZip = new JSZip();
+
+                for (let path of allZipPaths) {
+                    if (path.startsWith(baseFolder) && path !== baseFolder) {
+                        let relative = path.substring(baseFolder.length);
+                        let topName = relative.split('/')[0];
+
+                        if (selected.includes(topName)) {
+                            if (!currentZip.files[path].dir) {
+                                const fileData = await currentZip.files[path].async('blob');
+                                newZip.file(relative, fileData); 
+                            }
+                        }
+                    }
+                }
+
+                const content = await newZip.generateAsync({ type: "blob" });
+                
+                const url = URL.createObjectURL(content);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = "extracted_files.zip";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+            } catch (err) {
+                alert("Error: " + err.message);
+            } finally {
+                generateBtn.disabled = false;
+                loader.classList.add('hidden');
+                btnText.textContent = 'Generate New ZIP';
+            }
+        });
+    </script>
+</body>
+</html>
